@@ -1,0 +1,347 @@
+<!DOCTYPE html>
+
+<html class="dark" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>ALGO_CORE - Sliding Window</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700&amp;family=JetBrains+Mono:wght@400;500&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    "colors": {
+                        "tertiary-fixed": "#ffdad9",
+                        "outline-variant": "#414844",
+                        "inverse-on-surface": "#2f312f",
+                        "surface-container-lowest": "#0d0f0d",
+                        "surface-container-highest": "#333533",
+                        "primary": "#aacfb9",
+                        "secondary-fixed": "#e2e2e8",
+                        "surface-bright": "#383a38",
+                        "surface-container": "#1e201e",
+                        "surface-container-low": "#1a1c1a",
+                        "on-secondary-container": "#bbbbc1",
+                        "error": "#ffb4ab",
+                        "on-surface-variant": "#c1c8c2",
+                        "on-background": "#e3e3e0",
+                        "on-tertiary-fixed-variant": "#633c3d",
+                        "primary-container": "#8baf9a",
+                        "tertiary-fixed-dim": "#f0b9b9",
+                        "surface": "#121412",
+                        "inverse-primary": "#446553",
+                        "error-container": "#93000a",
+                        "surface-tint": "#aacfb9",
+                        "surface-variant": "#333533",
+                        "on-primary": "#153627",
+                        "on-tertiary-fixed": "#311213",
+                        "surface-container-high": "#292a29",
+                        "on-primary-container": "#214332",
+                        "on-primary-fixed-variant": "#2c4d3d",
+                        "on-secondary-fixed-variant": "#45474b",
+                        "primary-fixed-dim": "#aacfb9",
+                        "on-secondary-fixed": "#1a1c20",
+                        "on-secondary": "#2f3035",
+                        "primary-fixed": "#c6ebd4",
+                        "surface-dim": "#121412",
+                        "on-error-container": "#ffdad6",
+                        "tertiary": "#f0b9b9",
+                        "on-primary-fixed": "#002113",
+                        "secondary-fixed-dim": "#c6c6cb",
+                        "tertiary-container": "#ce9a9a",
+                        "secondary-container": "#4a4b50",
+                        "on-tertiary-container": "#573233",
+                        "inverse-surface": "#e3e3e0",
+                        "on-surface": "#e3e3e0",
+                        "background": "#121412",
+                        "on-tertiary": "#4a2627",
+                        "on-error": "#690005",
+                        "outline": "#8b928d",
+                        "secondary": "#c6c6cb"
+                    },
+                    "borderRadius": {
+                        "DEFAULT": "0.125rem",
+                        "lg": "0.25rem",
+                        "xl": "0.5rem",
+                        "full": "0.75rem"
+                    },
+                    "spacing": {
+                        "gutter": "24px",
+                        "sidebar-width": "240px",
+                        "sidebar-collapsed": "64px",
+                        "stack-lg": "24px",
+                        "stack-sm": "8px",
+                        "container-padding": "32px",
+                        "stack-md": "16px"
+                    },
+                    "fontFamily": {
+                        "mono-data": ["JetBrains Mono"],
+                        "body-lg": ["Geist Sans"],
+                        "headline-lg": ["Geist Sans"],
+                        "body-md": ["Geist Sans"],
+                        "headline-md": ["Geist Sans"],
+                        "mono-label": ["JetBrains Mono"],
+                        "display": ["Geist Sans"]
+                    },
+                    "fontSize": {
+                        "mono-data": ["14px", { "lineHeight": "1.4", "fontWeight": "400" }],
+                        "body-lg": ["16px", { "lineHeight": "1.6", "fontWeight": "400" }],
+                        "headline-lg": ["24px", { "lineHeight": "1.3", "fontWeight": "600" }],
+                        "body-md": ["14px", { "lineHeight": "1.5", "fontWeight": "400" }],
+                        "headline-md": ["20px", { "lineHeight": "1.4", "fontWeight": "500" }],
+                        "mono-label": ["12px", { "lineHeight": "1.0", "letterSpacing": "0.02em", "fontWeight": "500" }],
+                        "display": ["32px", { "lineHeight": "1.2", "letterSpacing": "-0.02em", "fontWeight": "600" }]
+                    }
+                }
+            }
+        }
+    </script>
+<style>
+        body { font-family: 'Geist', sans-serif; background-color: #0B0C0E; color: #e3e3e0; }
+        .card-panel { background-color: #131519; border: 1px solid #25282D; }
+        .border-subtle { border-color: #25282D; }
+        .text-accent { color: #8BAF9A; }
+        .bg-accent { background-color: #8BAF9A; }
+    </style>
+</head>
+<body class="bg-[#0B0C0E] text-on-surface antialiased min-h-screen flex">
+<!-- Persistent Sidebar -->
+<nav class="fixed left-0 top-0 h-full w-sidebar-width bg-surface dark:bg-surface border-r border-outline-variant flex flex-col py-8 z-50">
+<div class="px-gutter mb-8">
+<h1 class="font-display text-display text-primary uppercase tracking-tighter">ALGO_CORE</h1>
+<span class="font-mono-label text-mono-label text-on-surface-variant mt-1 block">v1.0.4</span>
+</div>
+<div class="flex-1 overflow-y-auto font-body-md text-body-md">
+<ul class="space-y-1">
+<li>
+<a class="flex items-center px-gutter py-3 text-on-surface-variant hover:text-on-surface hover:bg-surface-container transition-colors duration-200 cursor-pointer active:opacity-80" href="#">
+<span class="material-symbols-outlined mr-3 text-[20px]">dashboard</span>
+<span>Overview</span>
+</a>
+</li>
+<li>
+<a class="flex items-center px-gutter py-3 text-on-surface-variant hover:text-on-surface hover:bg-surface-container transition-colors duration-200 cursor-pointer active:opacity-80" href="#">
+<span class="material-symbols-outlined mr-3 text-[20px]">code</span>
+<span>Practice</span>
+</a>
+</li>
+<li>
+<a class="flex items-center px-gutter py-3 text-on-surface-variant hover:text-on-surface hover:bg-surface-container transition-colors duration-200 cursor-pointer active:opacity-80" href="#">
+<span class="material-symbols-outlined mr-3 text-[20px]">trending_up</span>
+<span>Progress</span>
+</a>
+</li>
+<li>
+<a class="flex items-center px-gutter py-3 text-primary border-l-2 border-primary bg-surface-container-high font-medium cursor-pointer active:opacity-80" href="#">
+<span class="material-symbols-outlined mr-3 text-[20px]">terminal</span>
+<span>Topics</span>
+</a>
+</li>
+<li>
+<a class="flex items-center px-gutter py-3 text-on-surface-variant hover:text-on-surface hover:bg-surface-container transition-colors duration-200 cursor-pointer active:opacity-80" href="#">
+<span class="material-symbols-outlined mr-3 text-[20px]">flag</span>
+<span>Goals</span>
+</a>
+</li>
+<li>
+<a class="flex items-center px-gutter py-3 text-on-surface-variant hover:text-on-surface hover:bg-surface-container transition-colors duration-200 cursor-pointer active:opacity-80" href="#">
+<span class="material-symbols-outlined mr-3 text-[20px]">history</span>
+<span>History</span>
+</a>
+</li>
+<li>
+<a class="flex items-center px-gutter py-3 text-on-surface-variant hover:text-on-surface hover:bg-surface-container transition-colors duration-200 cursor-pointer active:opacity-80" href="#">
+<span class="material-symbols-outlined mr-3 text-[20px]">settings</span>
+<span>Settings</span>
+</a>
+</li>
+</ul>
+</div>
+<div class="mt-auto px-gutter pt-4 border-t border-outline-variant font-mono-label text-mono-label">
+<a class="flex items-center py-3 text-on-surface-variant hover:text-on-surface transition-colors duration-200" href="#">
+<span class="material-symbols-outlined mr-3 text-[20px]">description</span>
+<span>Docs</span>
+</a>
+<div class="mt-4 flex items-center">
+<img class="w-8 h-8 rounded-full border border-outline-variant mr-3 object-cover" data-alt="A small circular avatar placeholder image showing a generic user silhouette in minimalist dark mode styling, subtle white lines on black background." src="https://lh3.googleusercontent.com/aida-public/AB6AXuC5cwQjIgbMUcgs7VRipQuDdizlqV31P6cO9uo1B8T04n70iFHH_5e5Ww2LBo6XHRazaEWfVIneTE7gz2VKuRm61oEwTXNf2HxCF0F8iFEvD-L6MyvtAY3o4vCu8rxSNwbOvPJdm9qTAEPK_cQz02-7ocCR87tlZFyhvLdMC73MdMfDi1TqrFQywrMjNS8xDC_XV7Rie4mo7p89ZBJ10pBUphPf2U4WZMOJ114uJLoaofgZaHjGXlI1"/>
+<span class="text-on-surface">User</span>
+</div>
+</div>
+</nav>
+<!-- Main Content Canvas -->
+<main class="ml-[240px] flex-1 min-h-screen p-container-padding flex flex-col gap-stack-lg max-w-[1400px] mx-auto">
+<!-- Header & Breadcrumbs -->
+<header class="flex justify-between items-end border-b border-subtle pb-stack-md">
+<div>
+<nav class="flex text-on-surface-variant font-mono-label text-mono-label mb-stack-sm space-x-2">
+<a class="hover:text-primary transition-colors" href="#">TOPICS</a>
+<span>/</span>
+<span class="text-primary">SLIDING WINDOW</span>
+</nav>
+<h2 class="font-display text-display text-on-surface">Sliding Window</h2>
+</div>
+<button class="bg-primary-container text-on-primary-container font-mono-label text-mono-label px-4 py-2 rounded-DEFAULT flex items-center gap-2 hover:opacity-90 transition-opacity">
+<span class="material-symbols-outlined text-[18px]">play_arrow</span>
+                START PRACTICE
+            </button>
+</header>
+<!-- Bento Grid Layout -->
+<div class="grid grid-cols-12 gap-stack-lg">
+<!-- Top Stats - Spanning full width in 4 cols -->
+<div class="col-span-12 grid grid-cols-4 gap-stack-sm">
+<div class="card-panel p-stack-md rounded-lg flex flex-col gap-stack-sm hover:bg-[#17191D] transition-colors">
+<span class="font-mono-label text-mono-label text-on-surface-variant">MASTERY</span>
+<div class="flex items-baseline gap-2">
+<span class="font-headline-lg text-headline-lg text-on-surface">54%</span>
+<span class="font-mono-data text-mono-data text-primary flex items-center"><span class="material-symbols-outlined text-[14px]">arrow_upward</span></span>
+</div>
+<div class="w-full bg-[#0F1113] h-[2px] mt-1"><div class="bg-primary h-full" style="width: 54%"></div></div>
+</div>
+<div class="card-panel p-stack-md rounded-lg flex flex-col gap-stack-sm hover:bg-[#17191D] transition-colors">
+<span class="font-mono-label text-mono-label text-on-surface-variant">PROBLEMS SOLVED</span>
+<div class="flex items-baseline gap-2">
+<span class="font-headline-lg text-headline-lg text-on-surface">12</span>
+<span class="font-mono-data text-mono-data text-on-surface-variant">/ 45</span>
+</div>
+</div>
+<div class="card-panel p-stack-md rounded-lg flex flex-col gap-stack-sm hover:bg-[#17191D] transition-colors">
+<span class="font-mono-label text-mono-label text-on-surface-variant">INDEPENDENT RATE</span>
+<div class="flex items-baseline gap-2">
+<span class="font-headline-lg text-headline-lg text-on-surface">58%</span>
+</div>
+</div>
+<div class="card-panel p-stack-md rounded-lg flex flex-col gap-stack-sm hover:bg-[#17191D] transition-colors">
+<span class="font-mono-label text-mono-label text-on-surface-variant">CURRENT TREND</span>
+<div class="flex items-baseline gap-2">
+<span class="font-headline-lg text-headline-lg text-primary">Upward</span>
+<span class="material-symbols-outlined text-primary text-[24px]">trending_up</span>
+</div>
+</div>
+</div>
+<!-- Left Column: Flow & Progress -->
+<div class="col-span-12 lg:col-span-5 flex flex-col gap-stack-lg">
+<!-- Prerequisite Flow -->
+<section class="card-panel p-stack-lg rounded-lg">
+<h3 class="font-headline-md text-headline-md text-on-surface mb-stack-md border-b border-subtle pb-2">Concept Flow</h3>
+<div class="flex flex-col gap-4 font-mono-data text-mono-data text-on-surface-variant relative mt-6">
+<!-- Connecting Line -->
+<div class="absolute left-[11px] top-[10px] bottom-[10px] w-[2px] bg-[#25282D] z-0"></div>
+<div class="flex items-center gap-4 relative z-10">
+<div class="w-6 h-6 rounded-full bg-[#131519] border border-primary flex items-center justify-center text-primary">
+<span class="material-symbols-outlined text-[14px]">check</span>
+</div>
+<span class="text-on-surface">Arrays</span>
+</div>
+<div class="flex items-center gap-4 relative z-10">
+<div class="w-6 h-6 rounded-full bg-[#131519] border border-primary flex items-center justify-center text-primary">
+<span class="material-symbols-outlined text-[14px]">check</span>
+</div>
+<span class="text-on-surface">Hashing</span>
+</div>
+<div class="flex items-center gap-4 relative z-10">
+<div class="w-6 h-6 rounded-full bg-[#131519] border border-primary flex items-center justify-center text-primary">
+<span class="material-symbols-outlined text-[14px]">check</span>
+</div>
+<span class="text-on-surface">Two Pointers</span>
+</div>
+<div class="flex items-center gap-4 relative z-10 bg-[#17191D] p-2 -ml-2 rounded border border-primary">
+<div class="w-6 h-6 rounded-full bg-primary flex items-center justify-center text-on-primary">
+<span class="material-symbols-outlined text-[14px]">my_location</span>
+</div>
+<span class="text-primary font-medium">Sliding Window (Current)</span>
+</div>
+</div>
+</section>
+<!-- Restrained Chart/Progress -->
+<section class="card-panel p-stack-lg rounded-lg flex-1">
+<h3 class="font-headline-md text-headline-md text-on-surface mb-stack-md border-b border-subtle pb-2">Mastery Trajectory</h3>
+<div class="h-48 w-full mt-4 flex items-end gap-2" data-alt="A minimalist data visualization showing a subtle upward trend using muted dark gray bars with the final rightmost bars highlighted in a muted sage green. The background is a stark black canvas. Highly technical, analytical mood.">
+<!-- Mock Chart Bars -->
+<div class="w-1/6 bg-[#25282D] h-[20%]"></div>
+<div class="w-1/6 bg-[#25282D] h-[35%]"></div>
+<div class="w-1/6 bg-[#25282D] h-[30%]"></div>
+<div class="w-1/6 bg-[#25282D] h-[50%]"></div>
+<div class="w-1/6 bg-[#8BAF9A] opacity-70 h-[45%]"></div>
+<div class="w-1/6 bg-[#8BAF9A] h-[60%]"></div>
+</div>
+<div class="flex justify-between font-mono-label text-mono-label text-on-surface-variant mt-2 border-t border-subtle pt-2">
+<span>Lvl 1</span>
+<span>Lvl 2</span>
+<span>Lvl 3</span>
+</div>
+</section>
+</div>
+<!-- Right Column: Recommended & History -->
+<div class="col-span-12 lg:col-span-7 flex flex-col gap-stack-lg">
+<!-- Recommended Next Problem (Hero Style) -->
+<section class="card-panel p-stack-lg rounded-lg border-l-2 border-l-primary bg-gradient-to-br from-[#131519] to-[#0F1113] relative overflow-hidden">
+<div class="absolute top-0 right-0 p-4 opacity-10 pointer-events-none">
+<span class="material-symbols-outlined text-[120px]">target</span>
+</div>
+<span class="font-mono-label text-mono-label text-primary mb-2 block">RECOMMENDED NEXT</span>
+<h3 class="font-headline-lg text-headline-lg text-on-surface mb-2">Longest Substring Without Repeating Characters</h3>
+<div class="flex items-center gap-3 mb-6">
+<span class="px-2 py-1 rounded bg-[#2A2312] text-[#E5C07B] font-mono-label text-mono-label uppercase">Medium</span>
+<span class="font-mono-data text-mono-data text-on-surface-variant">Time: ~25m</span>
+</div>
+<div class="bg-[#0F1113] p-4 rounded border border-subtle mb-6">
+<span class="font-mono-label text-mono-label text-on-surface-variant block mb-1">REASONING:</span>
+<p class="font-body-md text-body-md text-on-surface">"Prerequisites strong, room for improvement."</p>
+</div>
+<button class="bg-transparent border border-outline-variant text-on-surface px-6 py-2 rounded-DEFAULT font-mono-label text-mono-label hover:bg-[#17191D] hover:border-primary hover:text-primary transition-all flex items-center gap-2">
+<span>SOLVE NOW</span>
+<span class="material-symbols-outlined text-[16px]">arrow_forward</span>
+</button>
+</section>
+<!-- Recent Attempts Table -->
+<section class="card-panel p-stack-lg rounded-lg flex-1">
+<h3 class="font-headline-md text-headline-md text-on-surface mb-stack-md border-b border-subtle pb-2 flex justify-between items-center">
+                        Recent Attempts
+                        <span class="material-symbols-outlined text-on-surface-variant text-[20px] cursor-pointer hover:text-on-surface">filter_list</span>
+</h3>
+<div class="overflow-x-auto">
+<table class="w-full text-left font-body-md text-body-md border-collapse">
+<thead>
+<tr class="font-mono-label text-mono-label text-on-surface-variant border-b border-subtle">
+<th class="py-3 font-medium">PROBLEM</th>
+<th class="py-3 font-medium">DIFFICULTY</th>
+<th class="py-3 font-medium">RESULT</th>
+<th class="py-3 font-medium text-right">DATE</th>
+</tr>
+</thead>
+<tbody class="font-mono-data text-mono-data text-on-surface">
+<tr class="border-b border-subtle hover:bg-[#17191D] transition-colors group cursor-pointer">
+<td class="py-3 group-hover:text-primary transition-colors">Maximum Average Subarray I</td>
+<td class="py-3"><span class="text-[#8BAF9A]">Easy</span></td>
+<td class="py-3 flex items-center gap-2"><span class="material-symbols-outlined text-primary text-[16px]">check_circle</span> Accepted</td>
+<td class="py-3 text-right text-on-surface-variant">2h ago</td>
+</tr>
+<tr class="border-b border-subtle hover:bg-[#17191D] transition-colors group cursor-pointer">
+<td class="py-3 group-hover:text-primary transition-colors">Minimum Size Subarray Sum</td>
+<td class="py-3"><span class="text-[#E5C07B]">Medium</span></td>
+<td class="py-3 flex items-center gap-2"><span class="material-symbols-outlined text-[#E5C07B] text-[16px]">schedule</span> Timeout</td>
+<td class="py-3 text-right text-on-surface-variant">1d ago</td>
+</tr>
+<tr class="border-b border-subtle hover:bg-[#17191D] transition-colors group cursor-pointer">
+<td class="py-3 group-hover:text-primary transition-colors">Contains Duplicate II</td>
+<td class="py-3"><span class="text-[#8BAF9A]">Easy</span></td>
+<td class="py-3 flex items-center gap-2"><span class="material-symbols-outlined text-primary text-[16px]">check_circle</span> Accepted</td>
+<td class="py-3 text-right text-on-surface-variant">2d ago</td>
+</tr>
+<tr class="hover:bg-[#17191D] transition-colors group cursor-pointer">
+<td class="py-3 group-hover:text-primary transition-colors">Sliding Window Maximum</td>
+<td class="py-3"><span class="text-[#E06C75]">Hard</span></td>
+<td class="py-3 flex items-center gap-2"><span class="material-symbols-outlined text-[#E06C75] text-[16px]">error</span> W.A.</td>
+<td class="py-3 text-right text-on-surface-variant">3d ago</td>
+</tr>
+</tbody>
+</table>
+</div>
+</section>
+</div>
+</div>
+</main>
+</body></html>
