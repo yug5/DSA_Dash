@@ -4,7 +4,6 @@ import { useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { createClient } from '@/lib/supabase/client';
-import { initializeUserProfile } from '@/lib/services/dataService';
 import { LogIn, Key, Mail, AlertCircle, Zap } from 'lucide-react';
 
 export default function LoginPage() {
@@ -32,13 +31,34 @@ export default function LoginPage() {
     }
 
     if (data.user) {
-      initializeUserProfile(data.user.email || email, data.user.user_metadata?.name);
+      // Check whether this user has completed onboarding.
+      // Read only 2 lightweight columns — avoids fetching the full profile.
+      const { data: profileRow } = await supabase
+        .from('profiles')
+        .select('onboarding_completed, dsa_experience')
+        .eq('id', data.user.id)
+        .maybeSingle();
+
+      const onboardingDone =
+        profileRow?.onboarding_completed === true ||
+        profileRow?.dsa_experience != null;
+
+      setLoading(false);
+      router.refresh();
+
+      if (!onboardingDone) {
+        router.push('/onboarding');
+      } else {
+        router.push('/dashboard');
+      }
+      return;
     }
 
     setLoading(false);
     router.push('/dashboard');
     router.refresh();
   };
+
 
   return (
     <div className="min-h-screen bg-surface flex flex-col justify-center py-12 px-4 sm:px-6 lg:px-8 text-on-surface">

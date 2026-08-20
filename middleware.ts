@@ -13,7 +13,6 @@ export async function middleware(request: NextRequest) {
 
   if (!supabaseUrl || !supabaseKey) {
     console.error('Missing Supabase environment variables');
-
     return new NextResponse('Missing Supabase environment variables', {
       status: 500,
     });
@@ -24,7 +23,6 @@ export async function middleware(request: NextRequest) {
       getAll() {
         return request.cookies.getAll();
       },
-
       setAll(
         cookiesToSet: Array<{
           name: string;
@@ -35,11 +33,7 @@ export async function middleware(request: NextRequest) {
         cookiesToSet.forEach(({ name, value }) => {
           request.cookies.set(name, value);
         });
-
-        response = NextResponse.next({
-          request,
-        });
-
+        response = NextResponse.next({ request });
         cookiesToSet.forEach(({ name, value, options }) => {
           response.cookies.set(name, value, options);
         });
@@ -64,6 +58,7 @@ export async function middleware(request: NextRequest) {
     '/progress',
     '/goals',
     '/history',
+    '/settings',
     '/onboarding',
   ];
 
@@ -72,25 +67,63 @@ export async function middleware(request: NextRequest) {
   const isProtectedRoute =
     pathname === '/' ||
     protectedRoutes.some(
-      (route) =>
-        pathname === route || pathname.startsWith(`${route}/`)
+      (route) => pathname === route || pathname.startsWith(`${route}/`)
     );
 
   const isAuthRoute = authRoutes.some(
-    (route) =>
-      pathname === route || pathname.startsWith(`${route}/`)
+    (route) => pathname === route || pathname.startsWith(`${route}/`)
   );
 
+  const isOnboardingRoute =
+    pathname === '/onboarding' || pathname.startsWith('/onboarding/');
+
+  // ── Unauthenticated user hitting a protected route → login ──
   if (!user && isProtectedRoute) {
     const url = request.nextUrl.clone();
     url.pathname = '/login';
     return NextResponse.redirect(url);
   }
 
-  if (user && isAuthRoute) {
-    const url = request.nextUrl.clone();
-    url.pathname = '/dashboard';
-    return NextResponse.redirect(url);
+  // ── Authenticated user ──
+  if (user) {
+    // Already-logged-in user hitting login/signup → check onboarding first
+    if (isAuthRoute) {
+      const url = request.nextUrl.clone();
+      url.pathname = '/dashboard';
+      return NextResponse.redirect(url);
+    }
+
+    // Check onboarding status for all protected non-onboarding routes
+    if (isProtectedRoute && !isOnboardingRoute) {
+      // Read only the columns we need — keep middleware fast
+      const { data: profileData } = await supabase
+        .from('profiles')
+        .select('onboarding_completed, dsa_experience')
+        .eq('id', user.id)
+        .maybeSingle();
+
+      // Derive completion:
+      // - explicit flag wins
+      // - fall back to dsa_experience for pre-migration users
+      const onboardingDone =
+        profileData?.onboarding_completed === true ||
+        profileData?.dsa_experience != null;
+
+      if (!onboardingDone) {
+        // New user — must complete onboarding before accessing the app
+        const url = request.nextUrl.clone();
+        url.pathname = '/onboarding';
+        return NextResponse.redirect(url);
+      }
+    }
+
+    // Authenticated + already completed onboarding, but visiting /onboarding
+    // → allow through. Users can re-run onboarding to upgrade/downgrade level
+    // or change their daily target at any time.
+    if (isOnboardingRoute) {
+      // No redirect — let them reconfigure freely
+      return response;
+    }
   }
 
   return response;

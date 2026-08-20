@@ -19,6 +19,8 @@ export interface Profile {
   avatar_url?: string | null;
   dsa_experience: DSAExperience | null;
   available_freezes: number;
+  onboarding_completed: boolean;
+  daily_question_target: number;
   created_at: string;
   updated_at: string;
 }

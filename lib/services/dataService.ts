@@ -71,12 +71,15 @@ export async function initializeUserProfile(email: string, name?: string): Promi
     avatar_url: null,
     dsa_experience: null,
     available_freezes: 2,
+    onboarding_completed: false,
+    daily_question_target: 5,
     created_at: new Date().toISOString(),
     updated_at: new Date().toISOString(),
   };
 
   if (user) {
-    await supabase.from('profiles').upsert(profile, { onConflict: 'id' });
+    const { error } = await supabase.from('profiles').upsert(profile, { onConflict: 'id' });
+    if (error) console.error('[initializeUserProfile] upsert error:', error.message);
   }
   return profile;
 }
@@ -93,10 +96,55 @@ export async function getUserProfile(): Promise<Profile | null> {
     .maybeSingle();
 
   if (data) {
-    return data as Profile;
+    // Normalise missing columns that may not exist on older rows
+    return {
+      onboarding_completed: false,
+      daily_question_target: 5,
+      ...data,
+    } as Profile;
   }
 
   return await initializeUserProfile(user.email || 'solver@example.com', user.user_metadata?.name);
+}
+
+/**
+ * Returns true if the authenticated user has completed onboarding.
+ * Derives the answer from either the explicit flag or from dsa_experience
+ * being set (handles pre-migration existing users gracefully).
+ */
+export async function hasCompletedOnboarding(): Promise<boolean> {
+  const supabase = createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return false;
+
+  const { data } = await supabase
+    .from('profiles')
+    .select('onboarding_completed, dsa_experience')
+    .eq('id', user.id)
+    .maybeSingle();
+
+  if (!data) return false;
+
+  // Explicit flag takes priority; fall back to checking dsa_experience for
+  // pre-migration users who never had the column written.
+  return data.onboarding_completed === true || data.dsa_experience != null;
+}
+
+/**
+ * Resets the onboarding_completed flag so the user is redirected back to
+ * /onboarding on next navigation. Used by the "Re-run Onboarding" button.
+ */
+export async function resetOnboarding(): Promise<void> {
+  const supabase = createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return;
+
+  const { error } = await supabase
+    .from('profiles')
+    .update({ onboarding_completed: false, updated_at: new Date().toISOString() })
+    .eq('id', user.id);
+
+  if (error) throw new Error(`Failed to reset onboarding: ${error.message}`);
 }
 
 export async function completeOnboarding(
@@ -108,6 +156,7 @@ export async function completeOnboarding(
   const { data: { user } } = await supabase.auth.getUser();
   const userId = user?.id || 'usr_demo_1';
 
+  // Ensure profile exists before we try to create a goal (FK dependency)
   let profile = await getUserProfile();
   if (!profile) {
     profile = await initializeUserProfile(user?.email || 'demo@example.com');
@@ -116,14 +165,23 @@ export async function completeOnboarding(
   const updatedProfile: Profile = {
     ...profile,
     dsa_experience: experience,
+    // ── CRITICAL: mark onboarding complete and persist the chosen target ──
+    onboarding_completed: true,
+    daily_question_target: dailyTarget,
     updated_at: new Date().toISOString(),
   };
 
   if (user) {
-    await supabase.from('profiles').upsert(updatedProfile, { onConflict: 'id' });
+    const { error: profileError } = await supabase
+      .from('profiles')
+      .upsert(updatedProfile, { onConflict: 'id' });
+    if (profileError) {
+      throw new Error(`Failed to save profile: ${profileError.message}`);
+    }
   }
 
   // Initialize Topic Mastery based on Experience
+  // (these scores determine what difficulty the engine recommends)
   const topics = await getTopics();
   const masteryListPayload: UserTopicMastery[] = topics.map((topic) => {
     const initialScore = getInitialMasteryForExperience(experience, topic.id);
@@ -145,10 +203,15 @@ export async function completeOnboarding(
       rating: 1000,
       updated_at: new Date().toISOString(),
     }));
-    await supabase.from('user_topic_mastery').upsert(masteryRows, { onConflict: 'user_id,topic_id' });
+    const { error: masteryError } = await supabase
+      .from('user_topic_mastery')
+      .upsert(masteryRows, { onConflict: 'user_id,topic_id' });
+    if (masteryError) {
+      throw new Error(`Failed to initialize mastery: ${masteryError.message}`);
+    }
   }
 
-  // Create Goal
+  // Create or update goal using the user-selected daily target
   const startDate = new Date();
   const endDate = new Date(startDate.getTime() + durationDays * 24 * 60 * 60 * 1000);
   const totalTarget = dailyTarget * durationDays;
@@ -174,7 +237,7 @@ export async function completeOnboarding(
       .maybeSingle();
 
     if (existingGoal) {
-      const { data: updatedG } = await supabase
+      const { data: updatedG, error: goalUpdateError } = await supabase
         .from('goals')
         .update({
           daily_target: dailyTarget,
@@ -186,13 +249,15 @@ export async function completeOnboarding(
         .eq('id', existingGoal.id)
         .select()
         .single();
+      if (goalUpdateError) throw new Error(`Failed to update goal: ${goalUpdateError.message}`);
       goal = (updatedG || existingGoal) as Goal;
     } else {
-      const { data: newG } = await supabase
+      const { data: newG, error: goalInsertError } = await supabase
         .from('goals')
         .insert([goalPayload])
         .select()
         .single();
+      if (goalInsertError) throw new Error(`Failed to create goal: ${goalInsertError.message}`);
       goal = newG as Goal;
     }
   } else {
@@ -203,7 +268,7 @@ export async function completeOnboarding(
     };
   }
 
-  // Initialize Streak
+  // Initialize Streak if it doesn't already exist
   if (user) {
     await supabase.from('streaks').upsert({
       user_id: userId,
@@ -272,6 +337,30 @@ export async function getActiveGoal(): Promise<Goal | null> {
       .maybeSingle();
 
     if (data) return data as Goal;
+
+    // No goal row found — read the user's saved target from their profile
+    // so we never silently override their configured preference with 5.
+    const { data: profileRow } = await supabase
+      .from('profiles')
+      .select('daily_question_target')
+      .eq('id', userId)
+      .maybeSingle();
+    const savedDailyTarget = profileRow?.daily_question_target ?? 5;
+
+    const startDate = new Date().toISOString().split('T')[0];
+    const endDate = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
+    return {
+      id: 'g_default',
+      user_id: userId,
+      daily_target: savedDailyTarget,
+      start_date: startDate,
+      end_date: endDate,
+      total_target: savedDailyTarget * 30,
+      total_completed: 0,
+      status: 'ACTIVE',
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+    };
   }
 
   const startDate = new Date().toISOString().split('T')[0];

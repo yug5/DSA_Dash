@@ -38,17 +38,9 @@ export default function SignupPage() {
     }
 
     if (data.user) {
-      initializeUserProfile(email, name);
-      try {
-        await supabase.from('profiles').upsert({
-          id: data.user.id,
-          name: name,
-          email: email,
-          updated_at: new Date().toISOString(),
-        });
-      } catch {
-        // Table might not exist yet before SQL migration, safely proceed
-      }
+      // Await profile initialization — this MUST complete before completeOnboarding
+      // runs on the /onboarding page (which creates goal rows with a profile FK).
+      await initializeUserProfile(email, name);
     }
 
     setLoading(false);
