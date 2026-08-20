@@ -218,11 +218,12 @@ export async function completeOnboarding(
   return { profile: updatedProfile, goal, mastery: masteryListPayload };
 }
 
-export async function getUserMastery(): Promise<UserTopicMastery[]> {
+export async function getUserMastery(prefetchedTopics?: Topic[]): Promise<UserTopicMastery[]> {
   const supabase = createClient();
   const { data: { user } } = await supabase.auth.getUser();
   const userId = user?.id || 'usr_demo_1';
-  const topics = await getTopics();
+  // Accept pre-fetched topics to avoid a redundant round-trip when the caller already has them
+  const topics = prefetchedTopics ?? await getTopics();
 
   if (user) {
     const { data, error } = await supabase
@@ -409,17 +410,24 @@ export async function getTotalXP(): Promise<number> {
 }
 
 export async function getNextRecommendation(): Promise<QuestionRecommendation> {
-  const questions = await getQuestions();
-  const mastery = await getUserMastery();
-  const attempts = await getAttempts();
-  const prereqs = await getPrerequisites();
-  const gaps = await getUserUnresolvedGaps();
+  // Parallelize all independent reads for the recommendation engine
+  const [questions, mastery, attempts, prereqs, gaps] = await Promise.all([
+    getQuestions(),
+    getUserMastery(),
+    getAttempts(),
+    getPrerequisites(),
+    getUserUnresolvedGaps(),
+  ]);
 
   return rankAndRecommendQuestion(questions, mastery, attempts, prereqs, gaps);
 }
 
 /**
  * ATOMIC ATTEMPT REPORTING LOOP WITH SUPABASE PERSISTENCE
+ *
+ * Performance: parallelizes independent reads and writes with Promise.all().
+ * The expensive getNextRecommendation() is NOT awaited here — callers should
+ * fetch it independently after displaying the success state to the user.
  */
 export async function recordQuestionAttempt(params: {
   questionId: string;
@@ -434,94 +442,54 @@ export async function recordQuestionAttempt(params: {
   xpEarned: number;
   streak: Streak;
   dailyActivity: DailyActivity;
-  nextRecommendation: QuestionRecommendation;
 }> {
   const supabase = createClient();
   const { data: { user } } = await supabase.auth.getUser();
   const userId = user?.id || 'usr_demo_1';
+  const todayStr = new Date().toISOString().split('T')[0];
 
-  const questions = await getQuestions();
+  // ── BATCH 1: Parallel reads (nothing depends on each other here) ──
+  const [questions, currentMasteryList, goal, currentStreakObj, existingActRow] = await Promise.all([
+    getQuestions(),
+    getUserMastery(),
+    getActiveGoal(),
+    getStreak(),
+    user
+      ? supabase
+          .from('daily_activity')
+          .select('*')
+          .eq('user_id', userId)
+          .eq('date', todayStr)
+          .maybeSingle()
+          .then((res) => res.data as DailyActivity | null)
+      : Promise.resolve(null),
+  ]);
+
   const question = questions.find((q) => q.id === params.questionId) || questions[0];
 
-  // 1. Calculate Mastery & Elo Rating Change
+  // ── CALCULATIONS (pure, no I/O) ──
   const masteryDelta = calculateMasteryChange(params.result, question.difficulty);
-  const currentMasteryList = await getUserMastery();
   const primaryMasteryObj = currentMasteryList.find((m) => m.topic_id === question.primary_topic_id);
-
   const currentPrimaryScore = primaryMasteryObj?.score ?? 20;
   const currentPrimaryRating = primaryMasteryObj?.rating ?? 1000;
-
   const newPrimaryMastery = clampMastery(currentPrimaryScore + masteryDelta);
   const newPrimaryRating = calculateNewRating(currentPrimaryRating, question.difficulty, params.result);
 
-  if (user) {
-    await supabase.from('user_topic_mastery').upsert({
-      user_id: userId,
-      topic_id: question.primary_topic_id,
-      score: newPrimaryMastery,
-      rating: newPrimaryRating,
-      updated_at: new Date().toISOString(),
-    }, { onConflict: 'user_id,topic_id' });
-
-    for (const secId of question.secondary_topics) {
-      const secObj = currentMasteryList.find((m) => m.topic_id === secId);
-      const secScore = secObj?.score ?? 20;
-      const secRating = secObj?.rating ?? 1000;
-
-      const newSecScore = clampMastery(secScore + masteryDelta * 0.25);
-      const newSecRating = calculateNewRating(secRating, question.difficulty, params.result);
-
-      await supabase.from('user_topic_mastery').upsert({
-        user_id: userId,
-        topic_id: secId,
-        score: newSecScore,
-        rating: newSecRating,
-        updated_at: new Date().toISOString(),
-      }, { onConflict: 'user_id,topic_id' });
-    }
-
-    // 1b. Update Unresolved Gaps System
-    await updateUnresolvedGapsOnAttempt({
-      userId,
-      question,
-      result: params.result,
-      failureReason: params.failureReason,
-      usedHelp: params.usedHelp,
-    });
-  }
-
-  // 2. Update Daily Activity
-  const todayStr = new Date().toISOString().split('T')[0];
-  const goal = await getActiveGoal();
   const dailyTarget = goal?.daily_target ?? 5;
-
-  let activity: DailyActivity;
-  let existingActData: DailyActivity | null = null;
-
-  if (user) {
-    const { data: actRow } = await supabase
-      .from('daily_activity')
-      .select('*')
-      .eq('user_id', userId)
-      .eq('date', todayStr)
-      .maybeSingle();
-    if (actRow) existingActData = actRow as DailyActivity;
-  }
-
+  const existingActData = existingActRow ?? null;
   const isSolved = params.result !== 'DID_NOT_SOLVE';
   const prevAttempted = existingActData?.questions_attempted ?? 0;
   const prevCompleted = existingActData?.questions_completed ?? 0;
   const prevTargetCompleted = existingActData?.target_completed ?? false;
   const prevXPEarned = existingActData?.xp_earned ?? 0;
-
   const newAttempted = prevAttempted + 1;
   const newCompleted = isSolved ? prevCompleted + 1 : prevCompleted;
   const targetCompletedNow = !prevTargetCompleted && newCompleted >= dailyTarget;
-
-  // 3. XP Calculation
   const { totalXP } = calculateAttemptXP(question.difficulty, params.result, targetCompletedNow);
+  const updatedStreak = updateStreakOnPractice(currentStreakObj, todayStr);
 
-  activity = {
+  // Optimistic activity object (used if user is not authenticated)
+  let activity: DailyActivity = {
     id: existingActData?.id || `act_${Date.now()}`,
     user_id: userId,
     date: todayStr,
@@ -534,54 +502,7 @@ export async function recordQuestionAttempt(params: {
     updated_at: new Date().toISOString(),
   };
 
-  if (user) {
-    const { data: savedAct } = await supabase.from('daily_activity').upsert({
-      user_id: userId,
-      date: todayStr,
-      target: dailyTarget,
-      questions_attempted: newAttempted,
-      questions_completed: newCompleted,
-      target_completed: activity.target_completed,
-      xp_earned: activity.xp_earned,
-      updated_at: new Date().toISOString(),
-    }, { onConflict: 'user_id,date' }).select().single();
-    if (savedAct) activity = savedAct as DailyActivity;
-  }
-
-  if (totalXP > 0 && user) {
-    await supabase.from('xp_transactions').insert([{
-      user_id: userId,
-      amount: totalXP,
-      source: `Question Attempt: ${question.title}`,
-      reference_id: question.id,
-      created_at: new Date().toISOString(),
-    }]);
-  }
-
-  // 4. Update Streak
-  const currentStreakObj = await getStreak();
-  const updatedStreak = updateStreakOnPractice(currentStreakObj, todayStr);
-  if (user) {
-    await supabase.from('streaks').upsert({
-      user_id: userId,
-      current_streak: updatedStreak.current_streak,
-      longest_streak: updatedStreak.longest_streak,
-      last_practice_date: updatedStreak.last_practice_date,
-      available_freezes: updatedStreak.available_freezes,
-      updated_at: new Date().toISOString(),
-    }, { onConflict: 'user_id' });
-  }
-
-  // 5. Update Goal Total Completed
-  if (isSolved && goal && user && goal.id !== 'g_default') {
-    await supabase.from('goals').update({
-      total_completed: goal.total_completed + 1,
-      updated_at: new Date().toISOString(),
-    }).eq('id', goal.id);
-  }
-
-  // 6. Save Attempt
-  let attempt: Attempt;
+  // Optimistic attempt object
   const attemptPayload = {
     user_id: userId,
     question_id: question.id,
@@ -595,22 +516,102 @@ export async function recordQuestionAttempt(params: {
     created_at: new Date().toISOString(),
   };
 
+  let attempt: Attempt = { id: `att_${Date.now()}`, ...attemptPayload };
+
   if (user) {
-    const { data: savedAttempt } = await supabase
+    // ── BATCH 2: Parallel writes (all independent of each other) ──
+    const secondaryTopicUpserts = question.secondary_topics.map((secId) => {
+      const secObj = currentMasteryList.find((m) => m.topic_id === secId);
+      const secScore = secObj?.score ?? 20;
+      const secRating = secObj?.rating ?? 1000;
+      return supabase.from('user_topic_mastery').upsert({
+        user_id: userId,
+        topic_id: secId,
+        score: clampMastery(secScore + masteryDelta * 0.25),
+        rating: calculateNewRating(secRating, question.difficulty, params.result),
+        updated_at: new Date().toISOString(),
+      }, { onConflict: 'user_id,topic_id' });
+    });
+
+    const dailyActivityUpsert = supabase.from('daily_activity').upsert({
+      user_id: userId,
+      date: todayStr,
+      target: dailyTarget,
+      questions_attempted: newAttempted,
+      questions_completed: newCompleted,
+      target_completed: activity.target_completed,
+      xp_earned: activity.xp_earned,
+      updated_at: new Date().toISOString(),
+    }, { onConflict: 'user_id,date' }).select().single();
+
+    const streakUpsert = supabase.from('streaks').upsert({
+      user_id: userId,
+      current_streak: updatedStreak.current_streak,
+      longest_streak: updatedStreak.longest_streak,
+      last_practice_date: updatedStreak.last_practice_date,
+      available_freezes: updatedStreak.available_freezes,
+      updated_at: new Date().toISOString(),
+    }, { onConflict: 'user_id' });
+
+    const primaryMasteryUpsert = supabase.from('user_topic_mastery').upsert({
+      user_id: userId,
+      topic_id: question.primary_topic_id,
+      score: newPrimaryMastery,
+      rating: newPrimaryRating,
+      updated_at: new Date().toISOString(),
+    }, { onConflict: 'user_id,topic_id' });
+
+    const attemptInsert = supabase
       .from('attempts')
       .insert([attemptPayload])
       .select()
       .single();
-    attempt = (savedAttempt || { id: `att_${Date.now()}`, ...attemptPayload }) as Attempt;
-  } else {
-    attempt = {
-      id: `att_${Date.now()}`,
-      ...attemptPayload,
-    };
-  }
 
-  // 7. Generate Next Recommendation
-  const nextRecommendation = await getNextRecommendation();
+    const goalUpdate =
+      isSolved && goal && goal.id !== 'g_default'
+        ? supabase.from('goals').update({
+            total_completed: goal.total_completed + 1,
+            updated_at: new Date().toISOString(),
+          }).eq('id', goal.id)
+        : Promise.resolve(null);
+
+    const xpInsert =
+      totalXP > 0
+        ? supabase.from('xp_transactions').insert([{
+            user_id: userId,
+            amount: totalXP,
+            source: `Question Attempt: ${question.title}`,
+            reference_id: question.id,
+            created_at: new Date().toISOString(),
+          }])
+        : Promise.resolve(null);
+
+    // Fire all writes in parallel — none depends on any other
+    const [savedActResult, savedAttemptResult] = await Promise.all([
+      dailyActivityUpsert,
+      attemptInsert,
+      primaryMasteryUpsert,
+      streakUpsert,
+      goalUpdate,
+      xpInsert,
+      ...secondaryTopicUpserts,
+      // Gap tracking is non-critical; fire and forget (don't await its result)
+      updateUnresolvedGapsOnAttempt({
+        userId,
+        question,
+        result: params.result,
+        failureReason: params.failureReason,
+        usedHelp: params.usedHelp,
+      }).catch(() => null), // Never let gap errors block the user
+    ]);
+
+    if (savedActResult && 'data' in savedActResult && savedActResult.data) {
+      activity = savedActResult.data as DailyActivity;
+    }
+    if (savedAttemptResult && 'data' in savedAttemptResult && savedAttemptResult.data) {
+      attempt = savedAttemptResult.data as Attempt;
+    }
+  }
 
   return {
     attempt,
@@ -618,7 +619,6 @@ export async function recordQuestionAttempt(params: {
     xpEarned: totalXP,
     streak: updatedStreak,
     dailyActivity: activity,
-    nextRecommendation,
   };
 }
 

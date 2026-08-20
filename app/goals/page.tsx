@@ -8,7 +8,7 @@ import { Skeleton } from '@/components/ui/Skeleton';
 import { getActiveGoal, updateGoalTarget } from '@/lib/services/dataService';
 import { calculateGoalProjection } from '@/lib/services/goalService';
 import { Goal } from '@/lib/types';
-import { Target, Calendar, Award, Edit3, ArrowRight } from 'lucide-react';
+import { Target, Calendar, Award, Edit3, ArrowRight, Loader2, AlertCircle } from 'lucide-react';
 
 export default function GoalsPage() {
   const [goal, setGoal] = useState<Goal | null>(null);
@@ -16,6 +16,8 @@ export default function GoalsPage() {
   const [newTarget, setNewTarget] = useState<number>(5);
   const [newDays, setNewDays] = useState<number>(30);
   const [isLoading, setIsLoading] = useState<boolean>(true);
+  const [isSaving, setIsSaving] = useState<boolean>(false);
+  const [saveError, setSaveError] = useState<string | null>(null);
 
   useEffect(() => {
     async function loadData() {
@@ -53,9 +55,18 @@ export default function GoalsPage() {
 
   const handleUpdate = async (e: React.FormEvent) => {
     e.preventDefault();
-    const updated = await updateGoalTarget(newTarget, newDays);
-    setGoal(updated);
-    setIsEditing(false);
+    if (isSaving) return;
+    setIsSaving(true);
+    setSaveError(null);
+    try {
+      const updated = await updateGoalTarget(newTarget, newDays);
+      setGoal(updated);
+      setIsEditing(false);
+    } catch {
+      setSaveError('Failed to save. Please try again.');
+    } finally {
+      setIsSaving(false);
+    }
   };
 
   return (
@@ -123,11 +134,26 @@ export default function GoalsPage() {
                 New Expected Total Target: <strong className="text-primary font-bold">{newTarget * newDays} questions</strong>
               </div>
 
+              {saveError && (
+                <div className="p-3 bg-error-container/20 border border-error/30 rounded-sm flex items-center font-mono text-xs text-error">
+                  <AlertCircle className="w-4 h-4 mr-2 shrink-0" />
+                  <span>{saveError}</span>
+                </div>
+              )}
+
               <button
                 type="submit"
-                className="py-2.5 px-4 bg-primary text-on-primary rounded-sm font-mono text-xs font-bold hover:bg-primary-container transition-colors"
+                disabled={isSaving}
+                className="py-2.5 px-4 bg-primary text-on-primary rounded-sm font-mono text-xs font-bold hover:bg-primary-container transition-colors flex items-center gap-2 disabled:opacity-70 disabled:cursor-not-allowed"
               >
-                SAVE NEW GOAL PARAMETERS
+                {isSaving ? (
+                  <>
+                    <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                    Saving...
+                  </>
+                ) : (
+                  'SAVE NEW GOAL PARAMETERS'
+                )}
               </button>
             </form>
           </Card>

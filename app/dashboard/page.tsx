@@ -42,8 +42,10 @@ export default function DashboardPage() {
   const [todayActivity, setTodayActivity] = useState<DailyActivity | null>(null);
   const [isAttemptModalOpen, setIsAttemptModalOpen] = useState<boolean>(false);
   const [isLoading, setIsLoading] = useState<boolean>(true);
+  const [isRefreshing, setIsRefreshing] = useState<boolean>(false);
 
   const refreshData = async () => {
+    setIsRefreshing(true);
     try {
       const [rec, g, s, xp, m, t, activities] = await Promise.all([
         getNextRecommendation(),
@@ -66,6 +68,7 @@ export default function DashboardPage() {
       setTodayActivity(todayAct);
     } finally {
       setIsLoading(false);
+      setIsRefreshing(false);
     }
   };
 
@@ -236,10 +239,11 @@ export default function DashboardPage() {
 
           <button
             onClick={refreshData}
-            className="font-mono text-xs text-on-surface-variant hover:text-on-surface inline-flex items-center self-start md:self-auto bg-surface-container-high px-3 py-1.5 rounded-sm border border-outline-variant/60 transition-colors"
+            disabled={isRefreshing}
+            className="font-mono text-xs text-on-surface-variant hover:text-on-surface inline-flex items-center self-start md:self-auto bg-surface-container-high px-3 py-1.5 rounded-sm border border-outline-variant/60 transition-colors disabled:opacity-60"
           >
-            <RefreshCw className="w-3.5 h-3.5 mr-1.5" />
-            RE-SCORE RECOMMENDATION
+            <RefreshCw className={`w-3.5 h-3.5 mr-1.5 ${isRefreshing ? 'animate-spin' : ''}`} />
+            {isRefreshing ? 'RESCORING...' : 'RE-SCORE RECOMMENDATION'}
           </button>
         </div>
 

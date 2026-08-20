@@ -15,9 +15,11 @@ export default function SettingsPage() {
 
   useEffect(() => {
     async function loadData() {
-      const p = await getUserProfile();
-      const s = await getStreak();
-      const x = await getTotalXP();
+      const [p, s, x] = await Promise.all([
+        getUserProfile(),
+        getStreak(),
+        getTotalXP(),
+      ]);
       setProfile(p);
       setStreakCount(s?.current_streak || 0);
       setXp(x);

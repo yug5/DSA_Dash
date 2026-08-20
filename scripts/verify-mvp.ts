@@ -70,7 +70,8 @@ async function runE2ETest() {
   });
 
   console.log(`Attempt Recorded! Mastery Δ: ${attemptRes.masteryChange}, XP: +${attemptRes.xpEarned}, New Streak: ${attemptRes.streak.current_streak}`);
-  console.log(`Next Recommended Question: ${attemptRes.nextRecommendation.title}`);
+  const nextRec = await getNextRecommendation();
+  console.log(`Next Recommended Question: ${nextRec.title}`);
 
   console.log('\n=== ALL MVP SERVICE VERIFICATION TESTS PASSED SUCCESSFULLY! ===');
 }

@@ -1,19 +1,27 @@
 'use client';
 
+import { useState } from 'react';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import { createClient } from '@/lib/supabase/client';
-import { Target, Award, History, BarChart3, BookOpen, LogOut } from 'lucide-react';
+import { Target, Award, History, BarChart3, BookOpen, LogOut, Loader2 } from 'lucide-react';
 
 export default function Navbar() {
   const pathname = usePathname();
   const router = useRouter();
+  const [isSigningOut, setIsSigningOut] = useState(false);
 
   const handleSignOut = async () => {
-    const supabase = createClient();
-    await supabase.auth.signOut();
-    router.push('/login');
-    router.refresh();
+    if (isSigningOut) return;
+    setIsSigningOut(true);
+    try {
+      const supabase = createClient();
+      await supabase.auth.signOut();
+      router.push('/login');
+      router.refresh();
+    } finally {
+      setIsSigningOut(false);
+    }
   };
 
   const navItems = [
@@ -65,10 +73,15 @@ export default function Navbar() {
             </Link>
             <button
               onClick={handleSignOut}
-              className="inline-flex items-center text-xs text-slate-600 hover:text-slate-900 px-3 py-1.5 rounded border border-slate-200"
+              disabled={isSigningOut}
+              className="inline-flex items-center text-xs text-slate-600 hover:text-slate-900 px-3 py-1.5 rounded border border-slate-200 disabled:opacity-50"
             >
-              <LogOut className="w-3.5 h-3.5 mr-1" />
-              Sign Out
+              {isSigningOut ? (
+                <Loader2 className="w-3.5 h-3.5 mr-1 animate-spin" />
+              ) : (
+                <LogOut className="w-3.5 h-3.5 mr-1" />
+              )}
+              {isSigningOut ? 'Signing out...' : 'Sign Out'}
             </button>
           </div>
         </div>

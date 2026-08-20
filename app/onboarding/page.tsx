@@ -4,7 +4,7 @@ import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { completeOnboarding } from '@/lib/services/dataService';
 import { DSAExperience } from '@/lib/types';
-import { Target, Calendar, ArrowRight, Zap, Code2 } from 'lucide-react';
+import { Target, Calendar, ArrowRight, Zap, Code2, Loader2 } from 'lucide-react';
 import { Card } from '@/components/ui/Card';
 import { Badge } from '@/components/ui/Badge';
 
@@ -16,6 +16,7 @@ export default function OnboardingPage() {
   const [customTarget, setCustomTarget] = useState<string>('');
   const [durationDays, setDurationDays] = useState<number>(30);
   const [customDays, setCustomDays] = useState<string>('');
+  const [isSubmitting, setIsSubmitting] = useState<boolean>(false);
 
   const targetValue = dailyTarget === 0 ? Number(customTarget) || 1 : dailyTarget;
   const durationValue = durationDays === 0 ? Number(customDays) || 1 : durationDays;
@@ -23,8 +24,14 @@ export default function OnboardingPage() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    await completeOnboarding(experience, targetValue, durationValue);
-    router.push('/dashboard');
+    if (isSubmitting) return;
+    setIsSubmitting(true);
+    try {
+      await completeOnboarding(experience, targetValue, durationValue);
+      router.push('/dashboard');
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   return (
@@ -199,10 +206,20 @@ export default function OnboardingPage() {
 
           <button
             type="submit"
-            className="w-full py-3 bg-primary text-on-primary rounded-sm font-mono text-xs font-bold hover:bg-primary-container transition-colors flex items-center justify-center"
+            disabled={isSubmitting}
+            className="w-full py-3 bg-primary text-on-primary rounded-sm font-mono text-xs font-bold hover:bg-primary-container transition-colors flex items-center justify-center gap-2 disabled:opacity-70 disabled:cursor-not-allowed"
           >
-            COMPILE CONFIGURATION & LAUNCH
-            <ArrowRight className="w-4 h-4 ml-2" />
+            {isSubmitting ? (
+              <>
+                <Loader2 className="w-4 h-4 animate-spin" />
+                INITIALIZING...
+              </>
+            ) : (
+              <>
+                COMPILE CONFIGURATION & LAUNCH
+                <ArrowRight className="w-4 h-4" />
+              </>
+            )}
           </button>
         </form>
       </div>
