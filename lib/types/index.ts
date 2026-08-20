@@ -90,6 +90,7 @@ export interface Goal {
   total_target: number;
   total_completed: number;
   status: 'ACTIVE' | 'COMPLETED' | 'ABANDONED';
+  selected_topics?: string[] | null;
   created_at: string;
   updated_at: string;
 }

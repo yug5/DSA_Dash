@@ -150,7 +150,8 @@ export async function resetOnboarding(): Promise<void> {
 export async function completeOnboarding(
   experience: DSAExperience,
   dailyTarget: number,
-  durationDays: number
+  durationDays: number,
+  selectedTopics?: string[]
 ): Promise<{ profile: Profile; goal: Goal; mastery: UserTopicMastery[] }> {
   const supabase = createClient();
   const { data: { user } } = await supabase.auth.getUser();
@@ -211,10 +212,11 @@ export async function completeOnboarding(
     }
   }
 
-  // Create or update goal using the user-selected daily target
+  // Create or update goal using the user-selected daily target & topics
   const startDate = new Date();
   const endDate = new Date(startDate.getTime() + durationDays * 24 * 60 * 60 * 1000);
   const totalTarget = dailyTarget * durationDays;
+  const topicsPayload = selectedTopics && selectedTopics.length > 0 ? selectedTopics : null;
 
   const goalPayload = {
     user_id: userId,
@@ -224,6 +226,7 @@ export async function completeOnboarding(
     total_target: totalTarget,
     total_completed: 0,
     status: 'ACTIVE' as const,
+    selected_topics: topicsPayload,
     updated_at: new Date().toISOString(),
   };
 
@@ -244,6 +247,7 @@ export async function completeOnboarding(
           start_date: goalPayload.start_date,
           end_date: goalPayload.end_date,
           total_target: totalTarget,
+          selected_topics: topicsPayload,
           updated_at: new Date().toISOString(),
         })
         .eq('id', existingGoal.id)
@@ -379,7 +383,11 @@ export async function getActiveGoal(): Promise<Goal | null> {
   };
 }
 
-export async function updateGoalTarget(dailyTarget: number, durationDays: number): Promise<Goal> {
+export async function updateGoalTarget(
+  dailyTarget: number,
+  durationDays: number,
+  selectedTopics?: string[]
+): Promise<Goal> {
   const supabase = createClient();
   const { data: { user } } = await supabase.auth.getUser();
   const currentGoal = await getActiveGoal();
@@ -387,22 +395,46 @@ export async function updateGoalTarget(dailyTarget: number, durationDays: number
   const startDate = new Date();
   const endDate = new Date(startDate.getTime() + durationDays * 24 * 60 * 60 * 1000);
   const totalTarget = dailyTarget * durationDays;
+  const topicsPayload = selectedTopics && selectedTopics.length > 0 ? selectedTopics : null;
 
   if (user && currentGoal && currentGoal.id !== 'g_default') {
-    const { data: updated } = await supabase
+    const { data: updated, error } = await supabase
       .from('goals')
       .update({
         daily_target: dailyTarget,
         start_date: startDate.toISOString().split('T')[0],
         end_date: endDate.toISOString().split('T')[0],
         total_target: totalTarget,
+        selected_topics: topicsPayload,
         updated_at: new Date().toISOString(),
       })
       .eq('id', currentGoal.id)
       .select()
       .single();
 
+    if (error) throw new Error(`Failed to update goal: ${error.message}`);
     if (updated) return updated as Goal;
+  }
+
+  if (user) {
+    const newGoalPayload = {
+      user_id: user.id,
+      daily_target: dailyTarget,
+      start_date: startDate.toISOString().split('T')[0],
+      end_date: endDate.toISOString().split('T')[0],
+      total_target: totalTarget,
+      total_completed: 0,
+      status: 'ACTIVE' as const,
+      selected_topics: topicsPayload,
+      updated_at: new Date().toISOString(),
+    };
+    const { data: inserted, error } = await supabase
+      .from('goals')
+      .insert([newGoalPayload])
+      .select()
+      .single();
+    if (error) throw new Error(`Failed to create goal: ${error.message}`);
+    if (inserted) return inserted as Goal;
   }
 
   return {
@@ -411,6 +443,7 @@ export async function updateGoalTarget(dailyTarget: number, durationDays: number
     start_date: startDate.toISOString().split('T')[0],
     end_date: endDate.toISOString().split('T')[0],
     total_target: totalTarget,
+    selected_topics: topicsPayload,
     updated_at: new Date().toISOString(),
   };
 }
@@ -500,15 +533,25 @@ export async function getTotalXP(): Promise<number> {
 
 export async function getNextRecommendation(): Promise<QuestionRecommendation> {
   // Parallelize all independent reads for the recommendation engine
-  const [questions, mastery, attempts, prereqs, gaps] = await Promise.all([
+  const [questions, mastery, attempts, prereqs, gaps, activeGoal] = await Promise.all([
     getQuestions(),
     getUserMastery(),
     getAttempts(),
     getPrerequisites(),
     getUserUnresolvedGaps(),
+    getActiveGoal(),
   ]);
 
-  return rankAndRecommendQuestion(questions, mastery, attempts, prereqs, gaps);
+  let eligibleQuestions = questions;
+  if (activeGoal?.selected_topics && Array.isArray(activeGoal.selected_topics) && activeGoal.selected_topics.length > 0) {
+    const selectedSet = new Set(activeGoal.selected_topics);
+    const filtered = questions.filter((q) => selectedSet.has(q.primary_topic_id));
+    if (filtered.length > 0) {
+      eligibleQuestions = filtered;
+    }
+  }
+
+  return rankAndRecommendQuestion(eligibleQuestions, mastery, attempts, prereqs, gaps);
 }
 
 /**

@@ -2,10 +2,11 @@
 
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
-import { completeOnboarding, getUserProfile, getActiveGoal } from '@/lib/services/dataService';
-import { DSAExperience } from '@/lib/types';
+import { completeOnboarding, getUserProfile, getActiveGoal, getTopics } from '@/lib/services/dataService';
+import { DSAExperience, Topic } from '@/lib/types';
 import { Target, Calendar, ArrowRight, Zap, Loader2, AlertCircle, CheckCircle2 } from 'lucide-react';
 import { Card } from '@/components/ui/Card';
+import TopicSelector from '@/components/TopicSelector';
 
 export default function OnboardingPage() {
   const router = useRouter();
@@ -16,6 +17,9 @@ export default function OnboardingPage() {
   const [durationDays, setDurationDays] = useState<number>(30);
   const [customDays, setCustomDays] = useState<string>('');
 
+  const [availableTopics, setAvailableTopics] = useState<Topic[]>([]);
+  const [selectedTopicIds, setSelectedTopicIds] = useState<string[]>([]);
+
   const [isLoadingCurrent, setIsLoadingCurrent] = useState<boolean>(true);
   const [isSubmitting, setIsSubmitting] = useState<boolean>(false);
   const [submitStep, setSubmitStep] = useState<string>('');
@@ -25,11 +29,26 @@ export default function OnboardingPage() {
   useEffect(() => {
     async function loadCurrentConfig() {
       try {
-        const [profile, goal] = await Promise.all([getUserProfile(), getActiveGoal()]);
+        const [profile, goal, topics] = await Promise.all([
+          getUserProfile(),
+          getActiveGoal(),
+          getTopics(),
+        ]);
+
+        setAvailableTopics(topics);
 
         // Pre-fill experience/difficulty
         if (profile?.dsa_experience) {
           setExperience(profile.dsa_experience);
+        }
+
+        // Pre-fill topics
+        const allIds = topics.map((t) => t.id);
+        if (goal && goal.selected_topics && Array.isArray(goal.selected_topics) && goal.selected_topics.length > 0) {
+          setSelectedTopicIds(goal.selected_topics);
+        } else {
+          // Default: all topics selected
+          setSelectedTopicIds(allIds);
         }
 
         // Pre-fill daily target
@@ -72,12 +91,17 @@ export default function OnboardingPage() {
     e.preventDefault();
     if (isSubmitting) return;
 
+    if (selectedTopicIds.length === 0) {
+      setSubmitError('Select at least one topic to continue.');
+      return;
+    }
+
     setIsSubmitting(true);
     setSubmitError(null);
 
     try {
       setSubmitStep('Saving configuration...');
-      await completeOnboarding(experience, targetValue, durationValue);
+      await completeOnboarding(experience, targetValue, durationValue, selectedTopicIds);
 
       setSubmitStep('Configuration ready ✓');
       // router.refresh() forces the server to re-evaluate session/middleware
@@ -267,6 +291,16 @@ export default function OnboardingPage() {
             )}
           </div>
 
+          {/* Topic Selection */}
+          <div className="pt-2 border-t border-outline-variant/60">
+            <TopicSelector
+              topics={availableTopics}
+              selectedTopicIds={selectedTopicIds}
+              onChange={setSelectedTopicIds}
+              disabled={isSubmitting}
+            />
+          </div>
+
           {/* Configuration Preview — updates immediately with selections */}
           <div className="bg-surface-container p-4 rounded-sm border border-outline-variant/60 flex items-center justify-between font-mono text-xs">
             <div className="flex items-center space-x-3">
@@ -299,7 +333,7 @@ export default function OnboardingPage() {
           {/* Submit button with multi-step loading state */}
           <button
             type="submit"
-            disabled={isSubmitting}
+            disabled={isSubmitting || selectedTopicIds.length === 0}
             className="w-full py-3 bg-primary text-on-primary rounded-sm font-mono text-xs font-bold hover:bg-primary-container transition-colors flex items-center justify-center gap-2 disabled:opacity-70 disabled:cursor-not-allowed"
           >
             {isSubmitting ? (

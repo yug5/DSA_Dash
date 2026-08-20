@@ -5,13 +5,16 @@ import AppShell from '@/components/AppShell';
 import { Card } from '@/components/ui/Card';
 import { Badge } from '@/components/ui/Badge';
 import { Skeleton } from '@/components/ui/Skeleton';
-import { getActiveGoal, updateGoalTarget } from '@/lib/services/dataService';
+import { getActiveGoal, updateGoalTarget, getTopics } from '@/lib/services/dataService';
 import { calculateGoalProjection } from '@/lib/services/goalService';
-import { Goal } from '@/lib/types';
-import { Target, Calendar, Award, Edit3, ArrowRight, Loader2, AlertCircle } from 'lucide-react';
+import { Goal, Topic } from '@/lib/types';
+import { Target, Calendar, Award, Edit3, ArrowRight, Loader2, AlertCircle, CheckCircle2, Layers } from 'lucide-react';
+import TopicSelector from '@/components/TopicSelector';
 
 export default function GoalsPage() {
   const [goal, setGoal] = useState<Goal | null>(null);
+  const [availableTopics, setAvailableTopics] = useState<Topic[]>([]);
+  const [selectedTopicIds, setSelectedTopicIds] = useState<string[]>([]);
   const [isEditing, setIsEditing] = useState<boolean>(false);
   const [newTarget, setNewTarget] = useState<number>(5);
   const [newDays, setNewDays] = useState<number>(30);
@@ -22,10 +25,20 @@ export default function GoalsPage() {
   useEffect(() => {
     async function loadData() {
       try {
-        const active = await getActiveGoal();
+        const [active, topics] = await Promise.all([getActiveGoal(), getTopics()]);
         setGoal(active);
+        setAvailableTopics(topics);
+
+        const allIds = topics.map((t) => t.id);
         if (active) {
           setNewTarget(active.daily_target);
+          if (active.selected_topics && Array.isArray(active.selected_topics) && active.selected_topics.length > 0) {
+            setSelectedTopicIds(active.selected_topics);
+          } else {
+            setSelectedTopicIds(allIds);
+          }
+        } else {
+          setSelectedTopicIds(allIds);
         }
       } finally {
         setIsLoading(false);
@@ -56,10 +69,15 @@ export default function GoalsPage() {
   const handleUpdate = async (e: React.FormEvent) => {
     e.preventDefault();
     if (isSaving) return;
+    if (selectedTopicIds.length === 0) {
+      setSaveError('Select at least one topic to continue.');
+      return;
+    }
+
     setIsSaving(true);
     setSaveError(null);
     try {
-      const updated = await updateGoalTarget(newTarget, newDays);
+      const updated = await updateGoalTarget(newTarget, newDays, selectedTopicIds);
       setGoal(updated);
       setIsEditing(false);
     } catch {
@@ -134,6 +152,16 @@ export default function GoalsPage() {
                 New Expected Total Target: <strong className="text-primary font-bold">{newTarget * newDays} questions</strong>
               </div>
 
+              {/* Topic Selection */}
+              <div className="pt-3 border-t border-outline-variant/60">
+                <TopicSelector
+                  topics={availableTopics}
+                  selectedTopicIds={selectedTopicIds}
+                  onChange={setSelectedTopicIds}
+                  disabled={isSaving}
+                />
+              </div>
+
               {saveError && (
                 <div className="p-3 bg-error-container/20 border border-error/30 rounded-sm flex items-center font-mono text-xs text-error">
                   <AlertCircle className="w-4 h-4 mr-2 shrink-0" />
@@ -143,7 +171,7 @@ export default function GoalsPage() {
 
               <button
                 type="submit"
-                disabled={isSaving}
+                disabled={isSaving || selectedTopicIds.length === 0}
                 className="py-2.5 px-4 bg-primary text-on-primary rounded-sm font-mono text-xs font-bold hover:bg-primary-container transition-colors flex items-center gap-2 disabled:opacity-70 disabled:cursor-not-allowed"
               >
                 {isSaving ? (
@@ -213,6 +241,36 @@ export default function GoalsPage() {
                 <div className="text-on-surface-variant">Projected Total</div>
                 <div className="text-lg font-bold text-primary mt-1">{projection.projectedTotal} Qs</div>
               </div>
+            </div>
+          </div>
+
+          {/* Selected Topics Summary Card */}
+          <div className="bg-surface-container p-4 rounded-sm border border-outline-variant/60 font-mono text-xs">
+            <div className="flex items-center justify-between mb-2">
+              <div className="flex items-center space-x-2 text-primary font-bold uppercase tracking-wider">
+                <Layers className="w-4 h-4" />
+                <span>Selected Practice Topics</span>
+              </div>
+              <span className="text-[11px] text-on-surface-variant font-bold">
+                {goal.selected_topics && goal.selected_topics.length > 0
+                  ? `${goal.selected_topics.length} / ${availableTopics.length} selected`
+                  : `All Topics (${availableTopics.length}/${availableTopics.length})`}
+              </span>
+            </div>
+            <p className="text-on-surface-variant text-[11px] mb-3">
+              Your adaptive practice engine will only select questions matching these topics.
+            </p>
+            <div className="flex flex-wrap gap-1.5">
+              {availableTopics
+                .filter((t) => !goal.selected_topics || goal.selected_topics.length === 0 || goal.selected_topics.includes(t.id))
+                .map((topic) => (
+                  <span
+                    key={topic.id}
+                    className="px-2 py-0.5 rounded-sm bg-surface-container-high border border-outline-variant text-[11px] text-on-surface"
+                  >
+                    {topic.name}
+                  </span>
+                ))}
             </div>
           </div>
         </Card>

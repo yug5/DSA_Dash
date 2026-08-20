@@ -4,7 +4,7 @@ import { updateStreakOnPractice } from '../lib/services/streakService';
 import { calculateAttemptXP } from '../lib/services/xpService';
 import { getDailyMotivationMessage } from '../lib/services/motivationService';
 import { INITIAL_QUESTIONS, INITIAL_TOPICS, INITIAL_PREREQUISITES } from '../lib/services/mockDb';
-import { completeOnboarding, recordQuestionAttempt, getNextRecommendation } from '../lib/services/dataService';
+import { completeOnboarding, recordQuestionAttempt, getNextRecommendation, updateGoalTarget } from '../lib/services/dataService';
 
 console.log('=== RUNNING ADAPTIVE DSA PRACTICE PLATFORM SERVICE TESTS ===\n');
 
@@ -72,6 +72,15 @@ async function runE2ETest() {
   console.log(`Attempt Recorded! Mastery Δ: ${attemptRes.masteryChange}, XP: +${attemptRes.xpEarned}, New Streak: ${attemptRes.streak.current_streak}`);
   const nextRec = await getNextRecommendation();
   console.log(`Next Recommended Question: ${nextRec.title}`);
+
+  console.log('\n6. Testing Topic Filtering in Goal & Recommendation Engine...');
+  await updateGoalTarget(5, 30, ['arrays', 'two_pointers']);
+  const topicFilteredRec = await getNextRecommendation();
+  console.log(`Filtered Recommendation: ${topicFilteredRec.title} - Topic: ${topicFilteredRec.primary_topic_id}`);
+  if (!['arrays', 'two_pointers'].includes(topicFilteredRec.primary_topic_id)) {
+    throw new Error(`Topic filter failed: recommendation topic ${topicFilteredRec.primary_topic_id} not in ['arrays', 'two_pointers']`);
+  }
+  console.log('Topic filtering test PASSED!');
 
   console.log('\n=== ALL MVP SERVICE VERIFICATION TESTS PASSED SUCCESSFULLY! ===');
 }
