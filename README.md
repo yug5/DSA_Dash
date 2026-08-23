@@ -1,63 +1,68 @@
-# ⚡ DSA Dash
+# 🧠 DSA_Dash
 
-### 🧠 Your Personal DSA Practice & Progress Intelligence Platform
+### Adaptive DSA Practice Platform
 
-> **Practice smarter. Track deeper. Improve consistently.**
+> **Don't just practice more. Practice what you need next.**
 
-DSA Dash is a modern, adaptive DSA learning platform designed to help developers understand **what to practice, why to practice it, and how they are improving over time.**
+DSA_Dash is an adaptive Data Structures & Algorithms learning platform designed to turn traditional question practice into a **personalized learning loop**.
 
-Instead of simply solving random coding problems, DSA Dash analyzes your practice activity, identifies weak areas, tracks consistency, and helps create a more structured path toward DSA mastery.
-
----
-
-## ✨ Why DSA Dash?
-
-Most DSA platforms answer:
-
-> **"Here are some problems. Solve them."**
-
-DSA Dash aims to answer something more useful:
-
-> **"Based on your progress, here's what you should work on next."**
-
-The platform brings together:
-
-- 🎯 Goal-based DSA practice
-- 🧩 Topic & algorithm tracking
-- 📊 Performance analytics
-- 🧠 Adaptive recommendations
-- 🤖 AI coaching
-- 🔥 Streak & consistency tracking
-- ⭐ Mastery & rating systems
-- 📚 Practice history
-- ⚡ XP & progress tracking
+Instead of giving every user the same random list of questions, DSA_Dash tracks performance, identifies learning gaps, considers user-selected goals and topics, and continuously adapts what the user should practice next.
 
 ---
 
-# 🚀 Features
+## 🌐 Live Demo
 
-## 📊 Intelligent Dashboard
+🔗 **Live:** https://dsadash-six.vercel.app/
 
-Get a quick overview of your DSA journey.
+🔗 **GitHub:** https://github.com/yug5/DSA_Dash
 
-- Overall progress
-- Current streak
-- XP
-- Practice activity
+---
+
+# 01 — 🎯 What Problem Does It Solve?
+
+Most DSA platforms focus on one simple question:
+
+> **"Which question should you solve?"**
+
+But for a learner, the more important question is:
+
+> **"What should I learn or practice next?"**
+
+A beginner may not know Dynamic Programming yet.
+
+Giving them a random DP problem doesn't help.
+
+Similarly, a learner who is already strong in arrays shouldn't keep receiving beginner array questions simply because they haven't completed a fixed problem list.
+
+### DSA_Dash approaches this differently.
+
+The platform considers:
+
+- What the user wants to learn
+- Which topics they selected
+- Previous attempts
+- Performance
 - Topic mastery
-- Recent attempts
-- Recommended next actions
+- Learning gaps
+- Consistency
+- Goals
+- Recent practice activity
+
+and uses this information to determine what should come next.
 
 ---
 
-## 🎯 Goal-Based Learning
+# 02 — ⚡ Why Is It Different?
 
-Create goals based on what you actually want to achieve.
+DSA_Dash is not designed as another static problem list.
 
-Examples:
+### Traditional approach
 
 ```text
-🎯 Master Arrays
-🎯 Complete 50 DSA Problems
-🎯 Prepare for Technical Interviews
-🎯 Improve Dynamic Programming
+Pick Topic
+     ↓
+Pick Question
+     ↓
+Solve
+     ↓
+Next Question
