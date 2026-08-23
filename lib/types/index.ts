@@ -128,7 +128,14 @@ export interface Streak {
   longest_streak: number;
   last_practice_date: string | null; // YYYY-MM-DD
   available_freezes: number;
+  last_freezer_milestone?: number;
+  freezerEarned?: boolean;
   updated_at: string;
+}
+
+export interface StreakUpdateResult {
+  streak: Streak;
+  freezerEarned: boolean;
 }
 
 export interface XPTransaction {

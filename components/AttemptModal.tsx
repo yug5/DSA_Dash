@@ -15,6 +15,7 @@ interface AttemptModalProps {
   isOpen: boolean;
   onClose: () => void;
   onAttemptSubmitted: () => void;
+  onFreezerEarned?: () => void;
 }
 
 export default function AttemptModal({
@@ -22,6 +23,7 @@ export default function AttemptModal({
   isOpen,
   onClose,
   onAttemptSubmitted,
+  onFreezerEarned,
 }: AttemptModalProps) {
   const [result, setResult] = useState<AttemptResult>('SOLVED_INDEPENDENTLY');
   const [failureReason, setFailureReason] = useState<FailureReason>('DID_NOT_KNOW_APPROACH');
@@ -70,6 +72,10 @@ export default function AttemptModal({
       });
 
       onAttemptSubmitted();
+
+      if (res.streak.freezerEarned) {
+        onFreezerEarned?.();
+      }
 
       // Fetch recommendation in background after success screen is shown
       getNextRecommendation()

@@ -126,6 +126,7 @@ CREATE TABLE IF NOT EXISTS public.streaks (
   longest_streak INT DEFAULT 0,
   last_practice_date DATE,
   available_freezes INT DEFAULT 2,
+  last_freezer_milestone INT DEFAULT 0,
   updated_at TIMESTAMPTZ DEFAULT NOW()
 );
 

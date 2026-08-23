@@ -21,7 +21,7 @@ import {
 } from './mockDb';
 import { calculateMasteryChange, clampMastery, getInitialMasteryForExperience } from './masteryService';
 import { rankAndRecommendQuestion } from './recommendationService';
-import { updateStreakOnPractice } from './streakService';
+import { updateStreakOnPractice, evaluateStreakStatus } from './streakService';
 import { calculateAttemptXP } from './xpService';
 import { calculateNewRating } from './ratingService';
 import { getUserUnresolvedGaps, updateUnresolvedGapsOnAttempt } from './gapService';
@@ -478,7 +478,9 @@ export async function getStreak(): Promise<Streak> {
       .eq('user_id', userId)
       .maybeSingle();
 
-    if (data) return data as Streak;
+    if (data) {
+      return evaluateStreakStatus(data as Streak);
+    }
 
     const initialStreak: Streak = {
       user_id: userId,
@@ -486,6 +488,7 @@ export async function getStreak(): Promise<Streak> {
       longest_streak: 0,
       last_practice_date: null,
       available_freezes: 2,
+      last_freezer_milestone: 0,
       updated_at: new Date().toISOString(),
     };
     await supabase.from('streaks').upsert(initialStreak, { onConflict: 'user_id' });
@@ -498,6 +501,7 @@ export async function getStreak(): Promise<Streak> {
     longest_streak: 0,
     last_practice_date: null,
     available_freezes: 2,
+    last_freezer_milestone: 0,
     updated_at: new Date().toISOString(),
   };
 }
@@ -682,6 +686,7 @@ export async function recordQuestionAttempt(params: {
       longest_streak: updatedStreak.longest_streak,
       last_practice_date: updatedStreak.last_practice_date,
       available_freezes: updatedStreak.available_freezes,
+      last_freezer_milestone: updatedStreak.last_freezer_milestone ?? 0,
       updated_at: new Date().toISOString(),
     }, { onConflict: 'user_id' });
 

@@ -19,6 +19,7 @@ import {
 import { calculateGoalProjection } from '@/lib/services/goalService';
 import { getDailyMotivationMessage } from '@/lib/services/motivationService';
 import { QuestionRecommendation, Goal, Streak, DailyActivity, UserTopicMastery, Topic } from '@/lib/types';
+import { Toast } from '@/components/ui/Toast';
 import {
   Target,
   Flame,
@@ -30,6 +31,8 @@ import {
   RefreshCw,
   Zap,
   Activity,
+  Snowflake,
+  Info,
 } from 'lucide-react';
 
 export default function DashboardPage() {
@@ -43,6 +46,8 @@ export default function DashboardPage() {
   const [isAttemptModalOpen, setIsAttemptModalOpen] = useState<boolean>(false);
   const [isLoading, setIsLoading] = useState<boolean>(true);
   const [isRefreshing, setIsRefreshing] = useState<boolean>(false);
+  const [showTooltip, setShowTooltip] = useState<boolean>(false);
+  const [showFreezerToast, setShowFreezerToast] = useState<boolean>(false);
 
   const refreshData = async () => {
     setIsRefreshing(true);
@@ -164,24 +169,63 @@ export default function DashboardPage() {
           </div>
         </Card>
 
-        {/* Streak & Freeze */}
-        <Card className="flex flex-col justify-between">
+        {/* Streak & Streak Freezer */}
+        <Card className="flex flex-col justify-between relative">
           <div className="flex justify-between items-start">
             <div>
-              <span className="font-mono text-[11px] text-on-surface-variant uppercase tracking-widest">
-                Streak
-              </span>
-              <div className="font-mono font-bold text-2xl text-[#f2c94c] mt-1 flex items-center">
+              <div className="font-mono font-bold text-2xl text-[#f2c94c] flex items-center">
                 <Flame className="w-5 h-5 mr-1 fill-[#f2c94c]" />
-                {streak?.current_streak ?? 0}d
+                {streak?.current_streak ?? 0}
+              </div>
+              <div className="font-mono text-[10px] text-on-surface-variant uppercase tracking-widest mt-0.5">
+                DAY STREAK
               </div>
             </div>
             <span className="font-mono text-[11px] text-on-surface-variant">
               MAX {streak?.longest_streak ?? 0}d
             </span>
           </div>
-          <div className="mt-3 font-mono text-[11px] text-on-surface-variant">
-            Freezes: <span className="text-on-surface font-semibold">{streak?.available_freezes ?? 2} available</span>
+
+          <div className="mt-4 pt-3 border-t border-outline-variant/60 flex items-center justify-between">
+            <div>
+              <div className="font-mono font-bold text-xl text-cyan-400 flex items-center">
+                <Snowflake className="w-4.5 h-4.5 mr-1 text-cyan-400 fill-cyan-400/20" />
+                {streak?.available_freezes ?? 0}
+              </div>
+              <div className="font-mono text-[10px] text-on-surface-variant uppercase tracking-wider flex items-center gap-1.5 mt-0.5">
+                <span>STREAK FREEZERS</span>
+                <div className="relative inline-block">
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setShowTooltip((prev) => !prev);
+                    }}
+                    onMouseEnter={() => setShowTooltip(true)}
+                    onMouseLeave={() => setShowTooltip(false)}
+                    className="text-on-surface-variant hover:text-cyan-400 focus:outline-none transition-colors p-0.5 rounded-full"
+                    aria-label="Streak Freezer Information"
+                  >
+                    <Info className="w-3.5 h-3.5" />
+                  </button>
+
+                  {showTooltip && (
+                    <div
+                      className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 w-64 p-3 bg-surface-container-highest border border-outline-variant rounded shadow-xl font-mono text-[11px] text-on-surface normal-case leading-snug z-50 animate-in fade-in zoom-in-95 duration-150"
+                      onClick={(e) => e.stopPropagation()}
+                    >
+                      <div className="flex items-start gap-1.5">
+                        <Snowflake className="w-3.5 h-3.5 text-cyan-400 shrink-0 mt-0.5" />
+                        <span>
+                          Earn 1 Streak Freezer after 5 consecutive days of practice. Use it to protect your streak when you miss a day.
+                        </span>
+                      </div>
+                      <div className="absolute -bottom-1 left-1/2 -translate-x-1/2 w-2 h-2 bg-surface-container-highest border-r border-b border-outline-variant rotate-45" />
+                    </div>
+                  )}
+                </div>
+              </div>
+            </div>
           </div>
         </Card>
 
@@ -385,6 +429,17 @@ export default function DashboardPage() {
           setIsAttemptModalOpen(false);
           refreshData();
         }}
+        onFreezerEarned={() => {
+          setShowFreezerToast(true);
+        }}
+      />
+
+      {/* Streak Freezer Earned Toast Notification */}
+      <Toast
+        isVisible={showFreezerToast}
+        title="Streak Freezer earned!"
+        description="You completed 5 consecutive days."
+        onClose={() => setShowFreezerToast(false)}
       />
     </AppShell>
   );
