@@ -6,10 +6,11 @@ An adaptive DSA practice platform that personalizes what you practice based on y
 
 - Live Demo: https://dsa-dash.vercel.app
 - GitHub Repository: https://github.com/yug5/DSA_Dash
-  <img width="1919" height="928" alt="image" src="https://github.com/user-attachments/assets/cb69985f-b609-4b56-be8e-963256065f7e" />
-  <img width="1919" height="925" alt="image" src="https://github.com/user-attachments/assets/31ae48cb-a9fa-42af-adc4-6f87db37b1a5" />
-  <img width="1918" height="924" alt="image" src="https://github.com/user-attachments/assets/37d9eb72-22fe-4b95-8016-1eb5b1c9c56c" />
-
+  <p align="center">
+  <img src="https://github.com/user-attachments/assets/cb69985f-b609-4b56-be8e-963256065f7e" width="32%">
+  <img src="https://github.com/user-attachments/assets/31ae48cb-a9fa-42af-adc4-6f87db37b1a5" width="32%">
+  <img src="https://github.com/user-attachments/assets/37d9eb72-22fe-4b95-8016-1eb5b1c9c56c" width="32%">
+</p>
 
 
 ---
