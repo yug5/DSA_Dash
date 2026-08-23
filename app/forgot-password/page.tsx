@@ -3,33 +3,30 @@
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { initializeUserProfile } from '@/lib/services/dataService';
 import {
-  registerAccount,
-  verifySignupOtpToken,
-  resendSignupOtpToken,
+  sendPasswordResetOtpToken,
+  verifyRecoveryOtpToken,
+  updateUserPassword,
 } from '@/lib/services/authService';
-import { UserPlus, Mail, Key, User, AlertCircle, Zap, ShieldCheck, RefreshCw, CheckCircle2 } from 'lucide-react';
+import { Key, Mail, AlertCircle, Zap, ShieldCheck, RefreshCw, CheckCircle2, ArrowLeft, Lock } from 'lucide-react';
 
-export default function SignupPage() {
+export default function ForgotPasswordPage() {
   const router = useRouter();
-  
-  // Registration Form State
-  const [name, setName] = useState('');
+
+  // Workflow Steps: 1 = Email Input, 2 = Verify OTP, 3 = Reset Password
+  const [step, setStep] = useState<1 | 2 | 3>(1);
+
   const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
-
-  // Step state: 1 = Register form, 2 = OTP verification screen
-  const [step, setStep] = useState<1 | 2>(1);
-
-  // OTP Verification State
   const [otpToken, setOtpToken] = useState('');
+  const [newPassword, setNewPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
+
   const [loading, setLoading] = useState(false);
   const [resendLoading, setResendLoading] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [infoMsg, setInfoMsg] = useState<string | null>(null);
 
-  // Resend Cooldown Timer (60s)
+  // Resend Cooldown (60s)
   const [cooldown, setCooldown] = useState(0);
 
   useEffect(() => {
@@ -40,26 +37,28 @@ export default function SignupPage() {
     return () => clearInterval(timer);
   }, [cooldown]);
 
-  const handleSignupSubmit = async (e: React.FormEvent) => {
+  // Step 1: Send Password Reset OTP
+  const handleSendOtp = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
     setErrorMsg(null);
+    setInfoMsg(null);
 
-    const result = await registerAccount(email, password, name);
+    const result = await sendPasswordResetOtpToken(email);
 
+    setLoading(false);
     if (!result.success) {
-      setErrorMsg(result.error || 'Failed to create account.');
-      setLoading(false);
+      setErrorMsg(result.error || 'Failed to send password reset code.');
       return;
     }
 
-    setLoading(false);
     setStep(2);
     setCooldown(60);
-    setInfoMsg(`A 6-digit OTP code has been sent to ${email}.`);
+    setInfoMsg(`Password recovery OTP code sent to ${email}.`);
   };
 
-  const handleVerifyOtpSubmit = async (e: React.FormEvent) => {
+  // Step 2: Verify Recovery OTP
+  const handleVerifyOtp = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!otpToken || otpToken.trim().length < 6) {
       setErrorMsg('Please enter the full 6-digit OTP code.');
@@ -70,38 +69,67 @@ export default function SignupPage() {
     setErrorMsg(null);
     setInfoMsg(null);
 
-    const result = await verifySignupOtpToken(email, otpToken);
+    const result = await verifyRecoveryOtpToken(email, otpToken);
 
+    setLoading(false);
     if (!result.success) {
-      setErrorMsg(result.error || 'Invalid or expired OTP code. Please try again.');
-      setLoading(false);
+      setErrorMsg(result.error || 'Invalid or expired OTP token. Please try again.');
       return;
     }
 
-    // Initialize user profile row before redirecting to onboarding
-    await initializeUserProfile(email, name);
-
-    setLoading(false);
-    router.push('/onboarding');
-    router.refresh();
+    setStep(3);
+    setInfoMsg('OTP verified successfully. Please enter your new password.');
   };
 
+  // Step 3: Set New Password
+  const handleUpdatePassword = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (newPassword.length < 6) {
+      setErrorMsg('Password must be at least 6 characters long.');
+      return;
+    }
+
+    if (newPassword !== confirmPassword) {
+      setErrorMsg('Passwords do not match.');
+      return;
+    }
+
+    setLoading(true);
+    setErrorMsg(null);
+    setInfoMsg(null);
+
+    const result = await updateUserPassword(newPassword);
+
+    setLoading(false);
+    if (!result.success) {
+      setErrorMsg(result.error || 'Failed to update password.');
+      return;
+    }
+
+    setInfoMsg('Password updated successfully! Redirecting to login...');
+    setTimeout(() => {
+      router.push('/login');
+      router.refresh();
+    }, 1500);
+  };
+
+  // Resend OTP handler
   const handleResendOtp = async () => {
     if (cooldown > 0 || resendLoading) return;
     setResendLoading(true);
     setErrorMsg(null);
     setInfoMsg(null);
 
-    const result = await resendSignupOtpToken(email);
+    const result = await sendPasswordResetOtpToken(email);
 
     setResendLoading(false);
     if (!result.success) {
-      setErrorMsg(result.error || 'Could not resend OTP code.');
+      setErrorMsg(result.error || 'Could not resend recovery code.');
       return;
     }
 
     setCooldown(60);
-    setInfoMsg('A new OTP verification code has been dispatched to your email.');
+    setInfoMsg('A new recovery OTP code has been sent to your email.');
   };
 
   return (
@@ -110,16 +138,18 @@ export default function SignupPage() {
         <div className="flex justify-center">
           <div className="font-mono text-xs text-primary font-bold px-3 py-1 bg-surface-container-high rounded-sm border border-outline-variant flex items-center gap-1.5">
             <Zap className="w-3.5 h-3.5" />
-            ALGO_CORE v1.0.4
+            ALGO_CORE RECOVERY
           </div>
         </div>
         <h2 className="mt-4 text-center font-display text-display text-2xl font-semibold text-on-surface tracking-tight uppercase">
-          {step === 1 ? 'Create Your Account' : 'Verify Email OTP'}
+          {step === 1 && 'Reset Password'}
+          {step === 2 && 'Verify Recovery OTP'}
+          {step === 3 && 'Set New Password'}
         </h2>
         <p className="mt-1.5 text-center font-mono text-xs text-on-surface-variant">
-          {step === 1
-            ? 'Initialize Personalized Adaptive Practice Workflow'
-            : `Enter 6-digit code sent to ${email}`}
+          {step === 1 && 'Enter registered email to receive OTP recovery token'}
+          {step === 2 && `Enter 6-digit recovery code sent to ${email}`}
+          {step === 3 && 'Establish new authentication credentials'}
         </p>
       </div>
 
@@ -139,29 +169,12 @@ export default function SignupPage() {
             </div>
           )}
 
-          {step === 1 ? (
-            /* STEP 1: Registration Form */
-            <form onSubmit={handleSignupSubmit} className="space-y-4">
+          {/* STEP 1: Enter Email */}
+          {step === 1 && (
+            <form onSubmit={handleSendOtp} className="space-y-4">
               <div>
                 <label className="block font-mono text-xs text-on-surface-variant mb-1 uppercase tracking-wider">
-                  Full Name / Practitioner Handle
-                </label>
-                <div className="relative">
-                  <User className="w-4 h-4 text-on-surface-variant absolute left-3 top-3" />
-                  <input
-                    type="text"
-                    required
-                    placeholder="John Doe"
-                    value={name}
-                    onChange={(e) => setName(e.target.value)}
-                    className="w-full pl-9 pr-3 py-2.5 border border-outline-variant bg-surface-container rounded-sm font-mono text-xs text-on-surface focus:border-primary outline-none"
-                  />
-                </div>
-              </div>
-
-              <div>
-                <label className="block font-mono text-xs text-on-surface-variant mb-1 uppercase tracking-wider">
-                  Email Address
+                  Registered Email Address
                 </label>
                 <div className="relative">
                   <Mail className="w-4 h-4 text-on-surface-variant absolute left-3 top-3" />
@@ -176,38 +189,23 @@ export default function SignupPage() {
                 </div>
               </div>
 
-              <div>
-                <label className="block font-mono text-xs text-on-surface-variant mb-1 uppercase tracking-wider">
-                  Password
-                </label>
-                <div className="relative">
-                  <Key className="w-4 h-4 text-on-surface-variant absolute left-3 top-3" />
-                  <input
-                    type="password"
-                    required
-                    placeholder="••••••••"
-                    value={password}
-                    onChange={(e) => setPassword(e.target.value)}
-                    className="w-full pl-9 pr-3 py-2.5 border border-outline-variant bg-surface-container rounded-sm font-mono text-xs text-on-surface focus:border-primary outline-none"
-                  />
-                </div>
-              </div>
-
               <button
                 type="submit"
                 disabled={loading}
                 className="w-full py-3 bg-primary text-on-primary rounded-sm font-mono text-xs font-bold hover:bg-primary-container transition-colors flex items-center justify-center disabled:opacity-50"
               >
-                <UserPlus className="w-4 h-4 mr-2" />
-                {loading ? 'INITIALIZING ACCOUNT...' : 'REGISTER & INITIALIZE PLATFORM'}
+                <Mail className="w-4 h-4 mr-2" />
+                {loading ? 'SENDING OTP...' : 'SEND RECOVERY OTP'}
               </button>
             </form>
-          ) : (
-            /* STEP 2: Dedicated OTP Verification Screen */
-            <form onSubmit={handleVerifyOtpSubmit} className="space-y-4">
+          )}
+
+          {/* STEP 2: Verify Recovery OTP */}
+          {step === 2 && (
+            <form onSubmit={handleVerifyOtp} className="space-y-4">
               <div>
                 <label className="block font-mono text-xs text-on-surface-variant mb-1 uppercase tracking-wider">
-                  6-Digit OTP Verification Code
+                  6-Digit Recovery OTP Code
                 </label>
                 <div className="relative">
                   <ShieldCheck className="w-4 h-4 text-on-surface-variant absolute left-3 top-3" />
@@ -229,16 +227,17 @@ export default function SignupPage() {
                 className="w-full py-3 bg-primary text-on-primary rounded-sm font-mono text-xs font-bold hover:bg-primary-container transition-colors flex items-center justify-center disabled:opacity-50"
               >
                 <ShieldCheck className="w-4 h-4 mr-2" />
-                {loading ? 'VERIFYING OTP CODE...' : 'VERIFY OTP & CONTINUE'}
+                {loading ? 'VERIFYING CODE...' : 'VERIFY RECOVERY OTP'}
               </button>
 
               <div className="pt-2 flex items-center justify-between font-mono text-xs text-on-surface-variant border-t border-outline-variant/60">
                 <button
                   type="button"
                   onClick={() => setStep(1)}
-                  className="hover:text-on-surface transition-colors"
+                  className="hover:text-on-surface transition-colors flex items-center"
                 >
-                  ← Edit Signup Info
+                  <ArrowLeft className="w-3 h-3 mr-1" />
+                  Edit Email
                 </button>
 
                 <button
@@ -254,10 +253,58 @@ export default function SignupPage() {
             </form>
           )}
 
+          {/* STEP 3: Set New Password */}
+          {step === 3 && (
+            <form onSubmit={handleUpdatePassword} className="space-y-4">
+              <div>
+                <label className="block font-mono text-xs text-on-surface-variant mb-1 uppercase tracking-wider">
+                  New Password
+                </label>
+                <div className="relative">
+                  <Lock className="w-4 h-4 text-on-surface-variant absolute left-3 top-3" />
+                  <input
+                    type="password"
+                    required
+                    placeholder="••••••••"
+                    value={newPassword}
+                    onChange={(e) => setNewPassword(e.target.value)}
+                    className="w-full pl-9 pr-3 py-2.5 border border-outline-variant bg-surface-container rounded-sm font-mono text-xs text-on-surface focus:border-primary outline-none"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="block font-mono text-xs text-on-surface-variant mb-1 uppercase tracking-wider">
+                  Confirm New Password
+                </label>
+                <div className="relative">
+                  <Key className="w-4 h-4 text-on-surface-variant absolute left-3 top-3" />
+                  <input
+                    type="password"
+                    required
+                    placeholder="••••••••"
+                    value={confirmPassword}
+                    onChange={(e) => setConfirmPassword(e.target.value)}
+                    className="w-full pl-9 pr-3 py-2.5 border border-outline-variant bg-surface-container rounded-sm font-mono text-xs text-on-surface focus:border-primary outline-none"
+                  />
+                </div>
+              </div>
+
+              <button
+                type="submit"
+                disabled={loading}
+                className="w-full py-3 bg-primary text-on-primary rounded-sm font-mono text-xs font-bold hover:bg-primary-container transition-colors flex items-center justify-center disabled:opacity-50"
+              >
+                <Key className="w-4 h-4 mr-2" />
+                {loading ? 'UPDATING PASSWORD...' : 'UPDATE PASSWORD & LOGIN'}
+              </button>
+            </form>
+          )}
+
           <div className="mt-6 text-center font-mono text-xs text-on-surface-variant">
-            Already have an account?{' '}
+            Remembered your credentials?{' '}
             <Link href="/login" className="font-bold text-primary hover:underline">
-              SIGN IN
+              BACK TO SIGN IN
             </Link>
           </div>
         </div>

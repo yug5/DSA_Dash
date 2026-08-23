@@ -27,7 +27,7 @@ ON CONFLICT (id) DO NOTHING;
 INSERT INTO public.topic_prerequisites (topic_id, prerequisite_id) VALUES
   ('hashing', 'arrays'),
   ('two_pointers', 'hashing'),
-  ('sliding_window', 'two_pointers'),
+  ('sliding_window', 'two_pointers'), 
   ('backtracking', 'recursion'),
   ('bst', 'trees'),
   ('bfs', 'graphs'),
