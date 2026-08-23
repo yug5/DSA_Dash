@@ -4,14 +4,8 @@
 
 An adaptive DSA practice platform that personalizes what you practice based on your goals, topics, performance, mastery, and learning history.
 
-- Live Demo: https://the-dsa-dash.vercel.app
+- Live Demo: https://dsa-dash.vercel.app
 - GitHub Repository: https://github.com/yug5/DSA_Dash
-  <p align="center">
-  <img src="https://github.com/user-attachments/assets/cb69985f-b609-4b56-be8e-963256065f7e" width="32%">
-  <img src="https://github.com/user-attachments/assets/31ae48cb-a9fa-42af-adc4-6f87db37b1a5" width="32%">
-  <img src="https://github.com/user-attachments/assets/37d9eb72-22fe-4b95-8016-1eb5b1c9c56c" width="32%">
-</p>
-
 
 ---
 
