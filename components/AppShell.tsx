@@ -2,6 +2,7 @@
 
 import React from 'react';
 import Sidebar from './Sidebar';
+import AIAssistantWidget from './AIAssistantWidget';
 
 interface AppShellProps {
   children: React.ReactNode;
@@ -16,6 +17,7 @@ export default function AppShell({ children }: AppShellProps) {
           {children}
         </div>
       </main>
+      <AIAssistantWidget />
     </div>
   );
 }

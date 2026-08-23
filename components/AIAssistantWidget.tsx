@@ -80,9 +80,8 @@ export default function AIAssistantWidget() {
           className="fixed bottom-6 right-6 z-40 bg-surface-container-high border border-primary/40 text-primary hover:bg-surface-container-highest transition-all duration-200 p-3.5 rounded-full shadow-2xl flex items-center gap-2 font-mono text-xs group"
           aria-label="Open AI Assistant"
         >
-          <div className="relative">
+          <div>
             <Bot className="w-5 h-5 text-primary group-hover:scale-110 transition-transform" />
-            <span className="absolute -top-1 -right-1 w-2 h-2 bg-primary rounded-full animate-ping" />
           </div>
           <span className="font-bold hidden sm:inline uppercase tracking-wider text-on-surface">
             AI Assistant
@@ -153,13 +152,17 @@ export default function AIAssistantWidget() {
                   }`}
                 >
                   <div
-                    className={`max-w-[85%] p-3 rounded-md border text-xs leading-relaxed ${
+                    className={`max-w-[90%] p-3 rounded-md border text-xs leading-relaxed ${
                       msg.role === 'user'
                         ? 'bg-primary text-on-primary border-primary/50'
-                        : 'bg-surface-container border-outline-variant/80 text-on-surface whitespace-pre-wrap'
+                        : 'bg-surface-container border-outline-variant/80 text-on-surface'
                     }`}
                   >
-                    {msg.content}
+                    {msg.role === 'user' ? (
+                      msg.content
+                    ) : (
+                      <MarkdownContent content={msg.content} />
+                    )}
                   </div>
                   <span className="text-[9px] text-on-surface-variant mt-1 px-1">
                     {msg.timestamp}
@@ -203,5 +206,120 @@ export default function AIAssistantWidget() {
         </div>
       )}
     </>
+  );
+}
+
+function formatInline(text: string): React.ReactNode {
+  const tokens = text.split(/(\*\*.*?\*\*|`.*?`)/g);
+
+  return tokens.map((token, i) => {
+    if (token.startsWith('**') && token.endsWith('**')) {
+      return (
+        <strong key={i} className="font-bold text-on-surface">
+          {token.slice(2, -2)}
+        </strong>
+      );
+    }
+    if (token.startsWith('`') && token.endsWith('`')) {
+      return (
+        <code key={i} className="bg-surface-container-high text-cyan-400 px-1 py-0.5 rounded text-[11px] font-mono">
+          {token.slice(1, -1)}
+        </code>
+      );
+    }
+    return token;
+  });
+}
+
+function MarkdownContent({ content }: { content: string }) {
+  const parts = content.split(/(```[\s\S]*?```)/g);
+
+  return (
+    <div className="space-y-2 leading-relaxed font-mono">
+      {parts.map((part, index) => {
+        if (part.startsWith('```') && part.endsWith('```')) {
+          const rawInside = part.slice(3, -3).trim();
+          const lines = rawInside.split('\n');
+          const firstLine = lines[0] || '';
+          const isLangHeader = /^[a-zA-Z0-9_-]+$/.test(firstLine.trim());
+          const language = isLangHeader ? firstLine.trim() : '';
+          const codeBody = isLangHeader ? lines.slice(1).join('\n') : lines.join('\n');
+
+          return (
+            <div
+              key={index}
+              className="my-2 rounded bg-surface-container-lowest border border-outline-variant/60 overflow-hidden font-mono text-[11px]"
+            >
+              {language && (
+                <div className="px-3 py-1 bg-surface-container-high text-[10px] text-on-surface-variant uppercase tracking-wider font-semibold border-b border-outline-variant/40 flex justify-between items-center">
+                  <span>{language}</span>
+                </div>
+              )}
+              <pre className="p-3 text-cyan-300 overflow-x-auto whitespace-pre leading-relaxed font-mono text-[11px]">
+                {codeBody}
+              </pre>
+            </div>
+          );
+        }
+
+        const lines = part.split('\n');
+        return (
+          <React.Fragment key={index}>
+            {lines.map((line, lineIdx) => {
+              const trimmed = line.trim();
+              if (!trimmed) return <div key={lineIdx} className="h-1" />;
+
+              if (trimmed === '---') {
+                return <hr key={lineIdx} className="my-2 border-outline-variant/60" />;
+              }
+
+              if (trimmed.startsWith('###')) {
+                const headerText = trimmed.replace(/^###\s*/, '').replace(/^\*\*/, '').replace(/\*\*$/, '');
+                return (
+                  <h4 key={lineIdx} className="font-mono text-xs font-bold text-primary mt-2 mb-1">
+                    {formatInline(headerText)}
+                  </h4>
+                );
+              }
+
+              if (trimmed.startsWith('####')) {
+                const headerText = trimmed.replace(/^####\s*/, '').replace(/^\*\*/, '').replace(/\*\*$/, '');
+                return (
+                  <h5 key={lineIdx} className="font-mono text-xs font-semibold text-on-surface mt-1.5 mb-1">
+                    {formatInline(headerText)}
+                  </h5>
+                );
+              }
+
+              if (trimmed.startsWith('- ') || trimmed.startsWith('• ')) {
+                const listText = trimmed.replace(/^[-•]\s*/, '');
+                return (
+                  <div key={lineIdx} className="flex items-start gap-1.5 ml-1 my-0.5">
+                    <span className="text-cyan-400 shrink-0 select-none">•</span>
+                    <span>{formatInline(listText)}</span>
+                  </div>
+                );
+              }
+
+              const numMatch = trimmed.match(/^(\d+)\.\s*(.*)/);
+              if (numMatch) {
+                return (
+                  <div key={lineIdx} className="flex items-start gap-1.5 ml-1 my-0.5">
+                    <span className="text-primary font-bold shrink-0">{numMatch[1]}.</span>
+                    <span>{formatInline(numMatch[2])}</span>
+                  </div>
+                );
+              }
+
+              return (
+                <p key={lineIdx} className="my-0.5">
+                  {formatInline(line)}
+                </p>
+              );
+            })}
+          </React.Fragment>
+        );
+      })}
+    </div>
   );
 }
