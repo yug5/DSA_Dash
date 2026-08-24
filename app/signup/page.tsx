@@ -1,107 +1,49 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
+import { createClient } from '@/lib/supabase/client';
 import { initializeUserProfile } from '@/lib/services/dataService';
-import {
-  registerAccount,
-  verifySignupOtpToken,
-  resendSignupOtpToken,
-} from '@/lib/services/authService';
-import { UserPlus, Mail, Key, User, AlertCircle, Zap, ShieldCheck, RefreshCw, CheckCircle2 } from 'lucide-react';
+import { UserPlus, Mail, Key, User, AlertCircle, Zap } from 'lucide-react';
 
 export default function SignupPage() {
   const router = useRouter();
-  
-  // Registration Form State
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
-
-  // Step state: 1 = Register form, 2 = OTP verification screen
-  const [step, setStep] = useState<1 | 2>(1);
-
-  // OTP Verification State
-  const [otpToken, setOtpToken] = useState('');
   const [loading, setLoading] = useState(false);
-  const [resendLoading, setResendLoading] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
-  const [infoMsg, setInfoMsg] = useState<string | null>(null);
 
-  // Resend Cooldown Timer (60s)
-  const [cooldown, setCooldown] = useState(0);
-
-  useEffect(() => {
-    if (cooldown <= 0) return;
-    const timer = setInterval(() => {
-      setCooldown((prev) => prev - 1);
-    }, 1000);
-    return () => clearInterval(timer);
-  }, [cooldown]);
-
-  const handleSignupSubmit = async (e: React.FormEvent) => {
+  const handleSignup = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
     setErrorMsg(null);
 
-    const result = await registerAccount(email, password, name);
+    const supabase = createClient();
+    const { data, error } = await supabase.auth.signUp({
+      email,
+      password,
+      options: {
+        data: {
+          name,
+        },
+      },
+    });
 
-    if (!result.success) {
-      setErrorMsg(result.error || 'Failed to create account.');
+    if (error) {
+      setErrorMsg(error.message);
       setLoading(false);
       return;
     }
 
-    setLoading(false);
-    setStep(2);
-    setCooldown(60);
-    setInfoMsg(`A 6-digit OTP code has been sent to ${email}.`);
-  };
-
-  const handleVerifyOtpSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!otpToken || otpToken.trim().length < 6) {
-      setErrorMsg('Please enter the full 6-digit OTP code.');
-      return;
+    if (data.user) {
+      await initializeUserProfile(email, name);
     }
-
-    setLoading(true);
-    setErrorMsg(null);
-    setInfoMsg(null);
-
-    const result = await verifySignupOtpToken(email, otpToken);
-
-    if (!result.success) {
-      setErrorMsg(result.error || 'Invalid or expired OTP code. Please try again.');
-      setLoading(false);
-      return;
-    }
-
-    // Initialize user profile row before redirecting to onboarding
-    await initializeUserProfile(email, name);
 
     setLoading(false);
     router.push('/onboarding');
     router.refresh();
-  };
-
-  const handleResendOtp = async () => {
-    if (cooldown > 0 || resendLoading) return;
-    setResendLoading(true);
-    setErrorMsg(null);
-    setInfoMsg(null);
-
-    const result = await resendSignupOtpToken(email);
-
-    setResendLoading(false);
-    if (!result.success) {
-      setErrorMsg(result.error || 'Could not resend OTP code.');
-      return;
-    }
-
-    setCooldown(60);
-    setInfoMsg('A new OTP verification code has been dispatched to your email.');
   };
 
   return (
@@ -114,12 +56,10 @@ export default function SignupPage() {
           </div>
         </div>
         <h2 className="mt-4 text-center font-display text-display text-2xl font-semibold text-on-surface tracking-tight uppercase">
-          {step === 1 ? 'Create Your Account' : 'Verify Email OTP'}
+          Create Your Account
         </h2>
         <p className="mt-1.5 text-center font-mono text-xs text-on-surface-variant">
-          {step === 1
-            ? 'Initialize Personalized Adaptive Practice Workflow'
-            : `Enter 6-digit code sent to ${email}`}
+          Initialize Personalized Adaptive Practice Workflow
         </p>
       </div>
 
@@ -132,127 +72,67 @@ export default function SignupPage() {
             </div>
           )}
 
-          {infoMsg && (
-            <div className="mb-4 p-3 bg-primary/10 border border-primary/30 rounded-sm flex items-center font-mono text-xs text-primary">
-              <CheckCircle2 className="w-4 h-4 mr-2 shrink-0" />
-              <span>{infoMsg}</span>
+          <form onSubmit={handleSignup} className="space-y-4">
+            <div>
+              <label className="block font-mono text-xs text-on-surface-variant mb-1 uppercase tracking-wider">
+                Full Name / Practitioner Handle
+              </label>
+              <div className="relative">
+                <User className="w-4 h-4 text-on-surface-variant absolute left-3 top-3" />
+                <input
+                  type="text"
+                  required
+                  placeholder="John Doe"
+                  value={name}
+                  onChange={(e) => setName(e.target.value)}
+                  className="w-full pl-9 pr-3 py-2.5 border border-outline-variant bg-surface-container rounded-sm font-mono text-xs text-on-surface focus:border-primary outline-none"
+                />
+              </div>
             </div>
-          )}
 
-          {step === 1 ? (
-            /* STEP 1: Registration Form */
-            <form onSubmit={handleSignupSubmit} className="space-y-4">
-              <div>
-                <label className="block font-mono text-xs text-on-surface-variant mb-1 uppercase tracking-wider">
-                  Full Name / Practitioner Handle
-                </label>
-                <div className="relative">
-                  <User className="w-4 h-4 text-on-surface-variant absolute left-3 top-3" />
-                  <input
-                    type="text"
-                    required
-                    placeholder="John Doe"
-                    value={name}
-                    onChange={(e) => setName(e.target.value)}
-                    className="w-full pl-9 pr-3 py-2.5 border border-outline-variant bg-surface-container rounded-sm font-mono text-xs text-on-surface focus:border-primary outline-none"
-                  />
-                </div>
+            <div>
+              <label className="block font-mono text-xs text-on-surface-variant mb-1 uppercase tracking-wider">
+                Email Address
+              </label>
+              <div className="relative">
+                <Mail className="w-4 h-4 text-on-surface-variant absolute left-3 top-3" />
+                <input
+                  type="email"
+                  required
+                  placeholder="solver@example.com"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  className="w-full pl-9 pr-3 py-2.5 border border-outline-variant bg-surface-container rounded-sm font-mono text-xs text-on-surface focus:border-primary outline-none"
+                />
               </div>
+            </div>
 
-              <div>
-                <label className="block font-mono text-xs text-on-surface-variant mb-1 uppercase tracking-wider">
-                  Email Address
-                </label>
-                <div className="relative">
-                  <Mail className="w-4 h-4 text-on-surface-variant absolute left-3 top-3" />
-                  <input
-                    type="email"
-                    required
-                    placeholder="solver@example.com"
-                    value={email}
-                    onChange={(e) => setEmail(e.target.value)}
-                    className="w-full pl-9 pr-3 py-2.5 border border-outline-variant bg-surface-container rounded-sm font-mono text-xs text-on-surface focus:border-primary outline-none"
-                  />
-                </div>
+            <div>
+              <label className="block font-mono text-xs text-on-surface-variant mb-1 uppercase tracking-wider">
+                Password
+              </label>
+              <div className="relative">
+                <Key className="w-4 h-4 text-on-surface-variant absolute left-3 top-3" />
+                <input
+                  type="password"
+                  required
+                  placeholder="••••••••"
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  className="w-full pl-9 pr-3 py-2.5 border border-outline-variant bg-surface-container rounded-sm font-mono text-xs text-on-surface focus:border-primary outline-none"
+                />
               </div>
+            </div>
 
-              <div>
-                <label className="block font-mono text-xs text-on-surface-variant mb-1 uppercase tracking-wider">
-                  Password
-                </label>
-                <div className="relative">
-                  <Key className="w-4 h-4 text-on-surface-variant absolute left-3 top-3" />
-                  <input
-                    type="password"
-                    required
-                    placeholder="••••••••"
-                    value={password}
-                    onChange={(e) => setPassword(e.target.value)}
-                    className="w-full pl-9 pr-3 py-2.5 border border-outline-variant bg-surface-container rounded-sm font-mono text-xs text-on-surface focus:border-primary outline-none"
-                  />
-                </div>
-              </div>
-
-              <button
-                type="submit"
-                disabled={loading}
-                className="w-full py-3 bg-primary text-on-primary rounded-sm font-mono text-xs font-bold hover:bg-primary-container transition-colors flex items-center justify-center disabled:opacity-50"
-              >
-                <UserPlus className="w-4 h-4 mr-2" />
-                {loading ? 'INITIALIZING ACCOUNT...' : 'REGISTER & INITIALIZE PLATFORM'}
-              </button>
-            </form>
-          ) : (
-            /* STEP 2: Dedicated OTP Verification Screen */
-            <form onSubmit={handleVerifyOtpSubmit} className="space-y-4">
-              <div>
-                <label className="block font-mono text-xs text-on-surface-variant mb-1 uppercase tracking-wider">
-                  6-Digit OTP Verification Code
-                </label>
-                <div className="relative">
-                  <ShieldCheck className="w-4 h-4 text-on-surface-variant absolute left-3 top-3" />
-                  <input
-                    type="text"
-                    required
-                    maxLength={6}
-                    placeholder="123456"
-                    value={otpToken}
-                    onChange={(e) => setOtpToken(e.target.value.replace(/\D/g, ''))}
-                    className="w-full pl-9 pr-3 py-2.5 border border-outline-variant bg-surface-container rounded-sm font-mono text-sm tracking-widest text-center text-on-surface focus:border-primary outline-none"
-                  />
-                </div>
-              </div>
-
-              <button
-                type="submit"
-                disabled={loading}
-                className="w-full py-3 bg-primary text-on-primary rounded-sm font-mono text-xs font-bold hover:bg-primary-container transition-colors flex items-center justify-center disabled:opacity-50"
-              >
-                <ShieldCheck className="w-4 h-4 mr-2" />
-                {loading ? 'VERIFYING OTP CODE...' : 'VERIFY OTP & CONTINUE'}
-              </button>
-
-              <div className="pt-2 flex items-center justify-between font-mono text-xs text-on-surface-variant border-t border-outline-variant/60">
-                <button
-                  type="button"
-                  onClick={() => setStep(1)}
-                  className="hover:text-on-surface transition-colors"
-                >
-                  ← Edit Signup Info
-                </button>
-
-                <button
-                  type="button"
-                  onClick={handleResendOtp}
-                  disabled={cooldown > 0 || resendLoading}
-                  className="font-bold text-primary hover:underline flex items-center disabled:opacity-40"
-                >
-                  <RefreshCw className={`w-3 h-3 mr-1 ${resendLoading ? 'animate-spin' : ''}`} />
-                  {cooldown > 0 ? `Resend OTP in ${cooldown}s` : 'Resend OTP'}
-                </button>
-              </div>
-            </form>
-          )}
+            <button
+              type="submit"
+              disabled={loading}
+              className="w-full py-3 bg-primary text-on-primary rounded-sm font-mono text-xs font-bold hover:bg-primary-container transition-colors flex items-center justify-center disabled:opacity-50"
+            >
+              <UserPlus className="w-4 h-4 mr-2" />
+              {loading ? 'INITIALIZING ACCOUNT...' : 'REGISTER & INITIALIZE PLATFORM'}
+            </button>
+          </form>
 
           <div className="mt-6 text-center font-mono text-xs text-on-surface-variant">
             Already have an account?{' '}
